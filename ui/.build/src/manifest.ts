@@ -50,17 +50,24 @@ export function updateManifest(update: ManifestUpdate = {}): void {
 
 async function writeManifest() {
   if (!(env.manifestOk() && taskOk())) return;
-  const commitMessage = cps
-    .execSync('git log -1 --pretty=%s', { encoding: 'utf-8' })
-    .trim()
-    .replaceAll("'", '&#39;')
-    .replaceAll('"', '&quot;');
+  let commitMessage = 'dev-build';
+  let commitHash = 'dev';
+  try {
+    commitMessage = cps
+      .execSync('git log -1 --pretty=%s', { encoding: 'utf-8' })
+      .trim()
+      .replaceAll("'", '&#39;')
+      .replaceAll('"', '&quot;');
+    commitHash = cps.execSync('git rev-parse -q HEAD', { encoding: 'utf-8' }).trim();
+  } catch {
+    // git not available in container, use defaults
+  }
 
   const clientJs: string[] = [
     'if (!window.site) window.site={};',
     'const s=window.site;',
     's.info={};',
-    `s.info.commit='${cps.execSync('git rev-parse -q HEAD', { encoding: 'utf-8' }).trim()}';`,
+    `s.info.commit='${commitHash}';`,
     `s.info.message='${commitMessage}';`,
     `s.debug=${env.debug};`,
     's.asset={loadEsm:(m,o)=>import(`/assets/compiled/${m}${s.manifest.js[m]?"."+s.manifest.js[m]:""}.js`)' +
