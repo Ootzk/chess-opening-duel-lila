@@ -6,6 +6,7 @@ import chess.{ Position, ByColor, Rated }
 
 import lila.core.id.MatchId
 import lila.core.user.GameUser
+import lila.`match`.Match
 
 final private class ChallengeJoiner(
     gameRepo: lila.game.GameRepo,
@@ -18,10 +19,11 @@ final private class ChallengeJoiner(
     exists <- gameRepo.exists(c.gameId)
     _ <- raiseIf(exists)("The challenge has already been accepted")
     origUser <- c.challengerUserId.so(userApi.byIdWithPerf(_, c.perfType))
-    matchId <- createMatchIfNeeded(c, origUser, destUser)
-    game = ChallengeJoiner.createGame(c, origUser, destUser, matchId)
-    _ <- gameRepo.insertDenormalized(game)
-    _ <- matchId.so(mid => matchApi.addFirstGame(mid, game.id))
+    matchOpt <- createMatchIfNeeded(c, origUser, destUser)
+    initialFen = matchOpt.flatMap(_.openingForRound(1)).map(_.fen)
+    game = ChallengeJoiner.createGame(c, origUser, destUser, matchOpt.map(_.id), initialFen)
+    _ <- gameRepo.insertDenormalized(game, initialFen)
+    _ <- matchOpt.map(_.id).so(mid => matchApi.addFirstGame(mid, game.id))
     _ <- onStartOrRetry(game.id).recover: _ =>
       logger.error(s"onStart failed for game ${game.id}")
   yield Pov(game, !c.finalColor)
@@ -30,7 +32,7 @@ final private class ChallengeJoiner(
       c: Challenge,
       origUser: GameUser,
       destUser: GameUser
-  ): Fu[Option[MatchId]] =
+  ): Fu[Option[Match]] =
     c.matchType match
       case Some(Challenge.MatchType.OpeningDuel) =>
         (origUser.map(_.id), destUser.map(_.id)).tupled match
@@ -42,9 +44,9 @@ final private class ChallengeJoiner(
             val clock = c.timeControl match
               case Challenge.TimeControl.Clock(config) => config
               case _ => chess.Clock.Config(chess.Clock.LimitSeconds(300), chess.Clock.IncrementSeconds(0))
-            matchApi.create(players, c.variant, clock, c.initialFen).map(_.id.some)
-          case None => fuccess(none[MatchId]) // Anonymous players can't play matches
-      case _ => fuccess(none[MatchId])
+            matchApi.create(players, c.variant, clock).map(_.some)
+          case None => fuccess(none[Match]) // Anonymous players can't play matches
+      case _ => fuccess(none[Match])
 
   private def onStartOrRetry(id: GameId, retries: Int = 3): Funit =
     onStart
@@ -61,9 +63,13 @@ private object ChallengeJoiner:
       c: Challenge,
       origUser: GameUser,
       destUser: GameUser,
-      matchId: Option[MatchId] = None
+      matchId: Option[MatchId] = None,
+      matchInitialFen: Option[Fen.Full] = None  // Match의 오프닝 FEN
   ): Game =
-    val (chessGame, state) = gameSetup(c.variant, c.timeControl, c.initialFen)
+    // Match 게임이면 Match의 오프닝 FEN 사용, 아니면 Challenge의 initialFen 사용
+    val effectiveFen = matchInitialFen.orElse(c.initialFen)
+    val effectiveVariant = if matchInitialFen.isDefined then chess.variant.FromPosition else c.variant
+    val (chessGame, state) = gameSetup(effectiveVariant, c.timeControl, effectiveFen)
     val game = lila.core.game
       .newGame(
         chess = chessGame,

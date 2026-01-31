@@ -21,7 +21,7 @@ case class Match(
     winner: Option[Color],
     variant: chess.variant.Variant,
     clock: ClockConfig,
-    initialFen: Option[Fen.Full],
+    openings: List[OpeningPreset], // 각 게임의 오프닝 (bestOf 개수)
     createdAt: Instant,
     finishedAt: Option[Instant]
 ):
@@ -44,6 +44,13 @@ case class Match(
     else None
 
   def currentGame: Option[GameId] = gameIds.lastOption
+
+  // 현재 라운드의 오프닝
+  def openingForRound(round: Int): Option[OpeningPreset] =
+    openings.lift(round - 1)
+
+  // 현재 게임의 오프닝
+  def currentOpening: Option[OpeningPreset] = openingForRound(currentRound)
 
   // 게임 ID와 결과를 짝지어 반환 (UI용)
   def gamesWithResults: List[(GameId, Option[Color])] =
@@ -95,8 +102,7 @@ object Match:
   def make(
       players: ByColor[UserId],
       variant: chess.variant.Variant,
-      clock: ClockConfig,
-      initialFen: Option[Fen.Full]
+      clock: ClockConfig
   ): Match = Match(
     id = makeId,
     players = players,
@@ -108,7 +114,7 @@ object Match:
     winner = None,
     variant = variant,
     clock = clock,
-    initialFen = initialFen,
+    openings = OpeningPresets.randomN(bestOf),
     createdAt = nowInstant,
     finishedAt = None
   )

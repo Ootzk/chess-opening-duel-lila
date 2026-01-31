@@ -13,6 +13,20 @@ object BsonHandlers:
   given BSONHandler[chess.variant.Variant] = variantByKeyHandler
   given BSONHandler[chess.Clock.Config] = clockConfigHandler
 
+  given BSONHandler[OpeningPreset] = new BSONHandler[OpeningPreset]:
+    def readTry(bson: BSONValue) = bson match
+      case doc: BSONDocument =>
+        for
+          name <- doc.getAsTry[String]("n")
+          fen <- doc.getAsTry[String]("f")
+        yield OpeningPreset(name, Fen.Full(fen))
+      case _ => scala.util.Failure(new Exception("Expected BSONDocument for OpeningPreset"))
+
+    def writeTry(op: OpeningPreset) = scala.util.Success(BSONDocument(
+      "n" -> op.name,
+      "f" -> op.fen.value
+    ))
+
   given BSONHandler[Match.Status] = lila.db.dsl.quickHandler(
     { case BSONInteger(id) => Match.Status(id).getOrElse(Match.Status.Created) },
     { s => BSONInteger(s.id) }
@@ -47,7 +61,7 @@ object BsonHandlers:
         winner = r.getO[Boolean]("w").map(Color.fromWhite),
         variant = r.get[chess.variant.Variant]("v"),
         clock = r.get[chess.Clock.Config]("c"),
-        initialFen = r.getO[Fen.Full]("f"),
+        openings = r.getO[List[OpeningPreset]]("op").getOrElse(Nil),
         createdAt = r.get[Instant]("ca"),
         finishedAt = r.getO[Instant]("fa")
       )
@@ -63,7 +77,7 @@ object BsonHandlers:
         "w" -> o.winner.map(_.white),
         "v" -> o.variant,
         "c" -> o.clock,
-        "f" -> o.initialFen,
+        "op" -> o.openings,
         "ca" -> o.createdAt,
         "fa" -> o.finishedAt
       )

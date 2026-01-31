@@ -9,76 +9,105 @@
     border-collapse: collapse;
   }
 
-  &__row {
-    &:first-child {
+  thead {
+    th {
+      padding: 0.4em 0.6em;
+      font-size: 0.85em;
+      font-weight: normal;
+      color: $c-font-dimmer;
+      text-align: center;
       border-bottom: 1px solid $c-border;
     }
   }
 
-  &__player {
-    text-align: left;
-    padding: 0.5em 0.8em;
-    white-space: nowrap;
-    min-width: 120px;
-
-    a {
-      font-weight: bold;
-    }
+  &__header-game {
+    width: 3em;
   }
 
-  &__wins {
-    @include margin-inline-start(0.4em);
-
-    color: $c-font-dim;
-    font-size: 0.9em;
+  &__header-me,
+  &__header-opp {
+    width: 4em;
   }
 
-  &__cell {
-    text-align: center;
-    padding: 0.4em 0.6em;
-    min-width: 2em;
+  &__header-opening {
+    text-align: left !important;
+  }
 
+  &__row {
     &.current {
       background: $m-accent_bg--mix-70;
 
-      a,
-      span {
+      td {
         color: #fff;
         font-weight: bold;
       }
+
+      a {
+        color: #fff !important;
+      }
     }
+
+    &:not(:last-child) {
+      border-bottom: 1px solid rgba($c-border, 0.5);
+    }
+  }
+
+  &__game {
+    text-align: center;
+    padding: 0.4em 0.6em;
+    font-weight: bold;
+    color: $c-font-dim;
+  }
+
+  &__result {
+    text-align: center;
+    padding: 0.4em 0.6em;
 
     a,
     span {
-      display: block;
-      padding: 0.2em;
+      display: inline-block;
+      padding: 0.1em 0.3em;
     }
 
-    a.win {
+    .win {
       color: $c-good;
       font-weight: bold;
     }
 
-    a.loss {
+    .loss {
       color: $c-bad;
       font-weight: bold;
     }
 
-    a.draw {
+    .draw {
       color: $c-font-dim;
     }
 
-    a.in-progress {
+    .in-progress {
       color: $c-font-dim;
     }
 
-    span.pending {
+    .pending {
       color: $c-font-dimmer;
       opacity: 0.5;
     }
   }
 
-  &__round {
+  &__opening {
+    text-align: left;
+    padding: 0.4em 0.6em;
+    font-size: 0.9em;
+
+    a {
+      color: $c-font;
+
+      &:hover {
+        color: $c-link;
+      }
+    }
+  }
+
+  &__label {
     text-align: center;
     padding: 0.5em;
     background: $c-bg-zebra;

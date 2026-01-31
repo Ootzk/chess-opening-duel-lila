@@ -23,10 +23,9 @@ final class MatchApi(
   def create(
       players: ByColor[UserId],
       variant: chess.variant.Variant,
-      clock: ClockConfig,
-      initialFen: Option[Fen.Full]
+      clock: ClockConfig
   ): Fu[Match] =
-    val m = Match.make(players, variant, clock, initialFen)
+    val m = Match.make(players, variant, clock)
     repo.insert(m).inject(m)
 
   def byId(id: MatchId): Fu[Option[Match]] = repo.byId(id)
@@ -56,11 +55,12 @@ final class MatchApi(
         if m.isFinished || m.currentRound > Match.bestOf then fuccess(None)
         else
           val colorMapping = m.colorForRound(m.currentRound)
+          val initialFen = m.openingForRound(m.currentRound).map(_.fen)
           for
             whiteUser <- userApi.byIdWithPerf(colorMapping.white, m.perfType)
             blackUser <- userApi.byIdWithPerf(colorMapping.black, m.perfType)
             game <- makeGame(m, whiteUser, blackUser)
-            _ <- gameRepo.insertDenormalized(game)
+            _ <- gameRepo.insertDenormalized(game, initialFen)
             _ <- repo.addGame(m.id, game.id)
             _ <- onStart.exec(game.id)
           yield Some(game)
@@ -71,10 +71,33 @@ final class MatchApi(
       blackUser: GameUser
   )(using idGenerator: lila.core.game.IdGenerator): Fu[Game] =
     idGenerator.game.dmap: id =>
-      val chessGame = chess.Game(
-        position = m.variant.initialPosition,
-        clock = chess.Clock(m.clock).some
-      )
+      // 현재 라운드의 오프닝 가져오기
+      val opening = m.openingForRound(m.currentRound)
+      val initialFen = opening.map(_.fen)
+
+      // FEN으로 게임 생성 (FromPosition variant 사용)
+      val chessGame = initialFen match
+        case Some(fen) =>
+          Fen.readWithMoveNumber(chess.variant.FromPosition, fen) match
+            case Some(sit) =>
+              chess.Game(
+                position = sit.position,
+                ply = sit.ply,
+                startedAtPly = sit.ply,
+                clock = chess.Clock(m.clock).some
+              )
+            case None =>
+              // FEN 파싱 실패 시 폴백
+              chess.Game(
+                position = m.variant.initialPosition,
+                clock = chess.Clock(m.clock).some
+              )
+        case None =>
+          chess.Game(
+            position = m.variant.initialPosition,
+            clock = chess.Clock(m.clock).some
+          )
+
       lila.core.game
         .newGame(
           chess = chessGame,
