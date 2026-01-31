@@ -510,6 +510,12 @@ importers:
         specifier: workspace:*
         version: link:../voice
 
+  ui/series:
+    dependencies:
+      lib:
+        specifier: workspace:*
+        version: link:../lib
+
   ui/serviceWorker: {}
 
   ui/simul:

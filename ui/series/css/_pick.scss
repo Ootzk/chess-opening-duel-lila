@@ -1,0 +1,185 @@
+// Series Pick/Ban Phase UI
+
+.series-pick {
+  @extend %flex-column;
+  gap: $block-gap;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: $block-gap;
+
+  &__header {
+    @extend %flex-between;
+    align-items: center;
+    padding: $block-gap;
+    background: $c-bg-box;
+    @extend %box-radius;
+
+    h1 {
+      margin: 0;
+      font-size: 1.8em;
+    }
+  }
+
+  &__timer {
+    font-family: 'storm';
+    font-size: 3em;
+    padding: 0 $block-gap;
+
+    &.hurry {
+      color: $c-brag;
+      animation: pulse 1s infinite;
+    }
+  }
+
+  // 2 rows x 5 columns grid
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: $block-gap;
+
+    @media (max-width: 900px) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    @media (max-width: 600px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  &__opening {
+    @extend %flex-column;
+    @extend %box-radius;
+    background: $c-bg-box;
+    padding: calc($block-gap / 2);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 3px solid transparent;
+
+    &:hover:not(.disabled) {
+      background: $c-bg-zebra;
+      transform: translateY(-2px);
+    }
+
+    &.selected {
+      border-color: $c-good;
+
+      &.my-ban {
+        border-color: $c-bad;
+      }
+    }
+
+    &.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__board {
+    width: 100%;
+    aspect-ratio: 1;
+
+    cg-board {
+      @extend %box-radius;
+    }
+  }
+
+  &__name {
+    @extend %flex-between;
+    align-items: center;
+    padding: calc($block-gap / 2) 0;
+    min-height: 2.5em;
+
+    .opening-name {
+      font-size: 0.85em;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .opening-check {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-left: calc($block-gap / 2);
+
+      &.green {
+        background: $c-good;
+        box-shadow: 0 0 8px $c-good;
+
+        &::after {
+          content: '✓';
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 100%;
+          height: 100%;
+          color: white;
+          font-size: 14px;
+          font-weight: bold;
+        }
+      }
+
+      &.red {
+        background: $c-bad;
+        box-shadow: 0 0 8px $c-bad;
+
+        &::after {
+          content: '✗';
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 100%;
+          height: 100%;
+          color: white;
+          font-size: 14px;
+          font-weight: bold;
+        }
+      }
+    }
+  }
+
+  &__footer {
+    @extend %flex-between;
+    gap: $block-gap;
+
+    @media (max-width: 768px) {
+      flex-direction: column;
+    }
+  }
+
+  &__actions {
+    @extend %flex-center;
+
+    button {
+      font-size: 1.2em;
+      padding: 1em 2em;
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  &__chat {
+    flex: 1;
+    max-width: 400px;
+    min-height: 300px;
+
+    @media (max-width: 768px) {
+      max-width: 100%;
+      width: 100%;
+    }
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

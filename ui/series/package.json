@@ -1,0 +1,13 @@
+{
+  "name": "series",
+  "version": "1.0.0",
+  "private": true,
+  "description": "lichess.org series ban/pick",
+  "author": "Ootzk",
+  "dependencies": {
+    "lib": "workspace:*"
+  },
+  "build": {
+    "bundle": "src/series.pick.ts"
+  }
+}
