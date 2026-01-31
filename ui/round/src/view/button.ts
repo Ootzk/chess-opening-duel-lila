@@ -252,6 +252,7 @@ export function followUp(ctrl: RoundController): VNode {
       !d.tournament &&
       !d.simul &&
       !d.swiss &&
+      !d.match &&
       !d.game.boosted,
     newable = (finished(d) || aborted(d)) && ['lobby', 'pool', 'local'].includes(d.game.source),
     rematchZone = rematchable || d.game.rematch ? rematchButtons(ctrl) : [];

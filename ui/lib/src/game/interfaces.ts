@@ -9,10 +9,21 @@ export interface GameData {
   tournament?: Tournament;
   simul?: Simul;
   swiss?: Swiss;
+  match?: Match;
   takebackable: boolean;
   moretimeable: boolean;
   clock?: Clock;
   correspondence?: CorrespondenceClock;
+}
+
+export interface Match {
+  id: string;
+  round: number;
+  bestOf: number;
+  scores: [number, number];
+  finished: boolean;
+  openings: { name: string }[];
+  currentOpening?: string;
 }
 
 export interface Game {
