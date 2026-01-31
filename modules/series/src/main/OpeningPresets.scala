@@ -1,4 +1,4 @@
-package lila.`match`
+package lila.series
 
 import chess.format.Fen
 

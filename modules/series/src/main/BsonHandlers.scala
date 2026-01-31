@@ -1,4 +1,4 @@
-package lila.`match`
+package lila.series
 
 import chess.format.Fen
 import chess.{ ByColor, Color }
@@ -6,7 +6,7 @@ import reactivemongo.api.bson.*
 
 import lila.db.BSON
 import lila.db.dsl.{ *, given }
-import lila.core.id.{ GameId, MatchId }
+import lila.core.id.{ GameId, SeriesId }
 
 object BsonHandlers:
 
@@ -27,8 +27,8 @@ object BsonHandlers:
       "f" -> op.fen.value
     ))
 
-  given BSONHandler[Match.Status] = lila.db.dsl.quickHandler(
-    { case BSONInteger(id) => Match.Status(id).getOrElse(Match.Status.Created) },
+  given BSONHandler[Series.Status] = lila.db.dsl.quickHandler(
+    { case BSONInteger(id) => Series.Status(id).getOrElse(Series.Status.Created) },
     { s => BSONInteger(s.id) }
   )
 
@@ -45,19 +45,19 @@ object BsonHandlers:
       case Some(Color.Black) => BSONBoolean(false)
       case None => BSONNull
 
-  given BSON[Match] with
+  given BSON[Series] with
     def reads(r: BSON.Reader) =
       val playersList = r.get[List[UserId]]("p")
       val scoresList = r.get[List[Int]]("sc")
       val resultsList = r.getO[List[BSONValue]]("rs").getOrElse(Nil)
-      Match(
-        id = r.get[MatchId]("_id"),
+      Series(
+        id = r.get[SeriesId]("_id"),
         players = ByColor(playersList.head, playersList.last),
         scores = ByColor(scoresList.headOption.getOrElse(0), scoresList.lastOption.getOrElse(0)),
         gameIds = r.get[List[GameId]]("g"),
         results = readResults(resultsList),
         currentRound = r.get[Int]("r"),
-        status = r.get[Match.Status]("s"),
+        status = r.get[Series.Status]("s"),
         winner = r.getO[Boolean]("w").map(Color.fromWhite),
         variant = r.get[chess.variant.Variant]("v"),
         clock = r.get[chess.Clock.Config]("c"),
@@ -65,7 +65,7 @@ object BsonHandlers:
         createdAt = r.get[Instant]("ca"),
         finishedAt = r.getO[Instant]("fa")
       )
-    def writes(w: BSON.Writer, o: Match) =
+    def writes(w: BSON.Writer, o: Series) =
       $doc(
         "_id" -> o.id,
         "p" -> List(o.players.white, o.players.black),

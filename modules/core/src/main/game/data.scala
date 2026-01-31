@@ -4,7 +4,7 @@ package game
 import _root_.chess.format.pgn.PgnStr
 import _root_.chess.{ ByColor, Centis, Color, Ply }
 
-import lila.core.id.{ MatchId, SimulId, SwissId, TourId }
+import lila.core.id.{ SeriesId, SimulId, SwissId, TourId }
 import lila.core.userId.UserId
 
 case class GameMetadata(
@@ -13,7 +13,7 @@ case class GameMetadata(
     tournamentId: Option[TourId],
     swissId: Option[SwissId],
     simulId: Option[SimulId],
-    matchId: Option[MatchId],
+    seriesId: Option[SeriesId],
     analysed: Boolean,
     drawOffers: GameDrawOffers,
     rules: Set[GameRule]

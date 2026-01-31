@@ -83,9 +83,9 @@ async function boot(
             $meta = $html.find('.game__meta');
           $meta.length && $('.game__meta').replaceWith($meta);
           // Replace crosstable or match-score (for Opening Duel matches)
-          const $matchScore = $html.find('.match-score');
+          const $matchScore = $html.find('.series-score');
           if ($matchScore.length) {
-            $('.match-score').replaceWith($matchScore);
+            $('.series-score').replaceWith($matchScore);
           } else {
             $('.crosstable').replaceWith($html.find('.crosstable'));
           }

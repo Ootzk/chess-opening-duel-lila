@@ -11,7 +11,7 @@ def watcher(
     tour: Option[lila.tournament.TourAndTeamVs],
     simul: Option[lila.simul.Simul],
     cross: Option[lila.game.Crosstable.WithMatchup],
-    matchGame: Option[lila.`match`.Match] = None,
+    seriesGame: Option[lila.series.Series] = None,
     userTv: Option[User] = None,
     chatOption: Option[lila.chat.UserChat.Mine],
     bookmarked: Boolean
@@ -50,8 +50,8 @@ def watcher(
         ),
         ui.roundAppPreload(pov),
         div(cls := "round__underboard")(
-          matchGame
-            .map(m => views.`match`.ui.matchScore(m, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(m.colorOf))))
+          seriesGame
+            .map(s => views.series.ui.seriesScore(s, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(s.colorOf))))
             .orElse(views.game.ui.crosstable.option(cross, pov.game))
         ),
         div(cls := "round__underchat")(underchat(pov.game))

@@ -196,7 +196,7 @@ object BSONHandlers:
           tournamentId = r.getO[TourId](F.tournamentId),
           swissId = r.getO[SwissId](F.swissId),
           simulId = r.getO[SimulId](F.simulId),
-          matchId = r.getO[MatchId](F.matchId),
+          seriesId = r.getO[SeriesId](F.seriesId),
           analysed = r.boolD(F.analysed),
           drawOffers = r.getD(F.drawOffers, emptyDrawOffers),
           rules = r.getD(F.rules, Set.empty)
@@ -237,7 +237,7 @@ object BSONHandlers:
         F.tournamentId -> o.metadata.tournamentId,
         F.swissId -> o.metadata.swissId,
         F.simulId -> o.metadata.simulId,
-        F.matchId -> o.metadata.matchId,
+        F.seriesId -> o.metadata.seriesId,
         F.analysed -> w.boolO(o.metadata.analysed),
         F.rules -> o.metadata.nonEmptyRules
       ) ++ {

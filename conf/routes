@@ -467,10 +467,10 @@ GET   /swiss/$id<\w{8}>/player/:user          controllers.Swiss.player(id: Swiss
 POST  /api/swiss/$id<\w{8}>/schedule-next-round controllers.Swiss.scheduleNextRound(id: SwissId)
 GET   /$lang<\w\w\w?>/swiss                   controllers.Swiss.homeLang(lang: Language)
 
-# Match (Best of 5)
-GET   /match/$id<\w{8}>                       controllers.Match.show(id: MatchId)
-GET   /api/match/$id<\w{8}>                   controllers.Match.apiShow(id: MatchId)
-POST  /match/$id<\w{8}>/next                  controllers.Match.nextGame(id: MatchId)
+# Series (Best of 5)
+GET   /series/$id<\w{8}>                      controllers.Series.show(id: SeriesId)
+GET   /api/series/$id<\w{8}>                  controllers.Series.apiShow(id: SeriesId)
+POST  /series/$id<\w{8}>/next                 controllers.Series.nextGame(id: SeriesId)
 
 # Simul
 GET   /simul                                  controllers.Simul.home

@@ -1,16 +1,16 @@
-package lila.`match`
+package lila.series
 
 import chess.Clock.Config as ClockConfig
 import chess.format.Fen
 import chess.{ ByColor, Color }
 
 import lila.common.Bus
-import lila.core.id.{ GameId, MatchId }
+import lila.core.id.{ GameId, SeriesId }
 import lila.core.user.GameUser
 import lila.core.userId.UserId
 
-final class MatchApi(
-    repo: MatchRepo,
+final class SeriesApi(
+    repo: SeriesRepo,
     gameRepo: lila.core.game.GameRepo,
     newPlayer: lila.core.game.NewPlayer,
     userApi: lila.core.user.UserApi,
@@ -24,55 +24,55 @@ final class MatchApi(
       players: ByColor[UserId],
       variant: chess.variant.Variant,
       clock: ClockConfig
-  ): Fu[Match] =
-    val m = Match.make(players, variant, clock)
-    repo.insert(m).inject(m)
+  ): Fu[Series] =
+    val s = Series.make(players, variant, clock)
+    repo.insert(s).inject(s)
 
-  def byId(id: MatchId): Fu[Option[Match]] = repo.byId(id)
+  def byId(id: SeriesId): Fu[Option[Series]] = repo.byId(id)
 
-  def byGameId(gameId: GameId): Fu[Option[Match]] = repo.byGameId(gameId)
+  def byGameId(gameId: GameId): Fu[Option[Series]] = repo.byGameId(gameId)
 
-  def addFirstGame(matchId: MatchId, gameId: GameId): Funit =
-    repo.addGame(matchId, gameId)
+  def addFirstGame(seriesId: SeriesId, gameId: GameId): Funit =
+    repo.addGame(seriesId, gameId)
 
-  def finishGame(matchId: MatchId, gameId: GameId, winnerId: Option[UserId]): Funit =
-    repo.byId(matchId).flatMap:
+  def finishGame(seriesId: SeriesId, gameId: GameId, winnerId: Option[UserId]): Funit =
+    repo.byId(seriesId).flatMap:
       case None => funit
-      case Some(m) =>
-        // Convert winner userId to match color
-        val winnerMatchColor = winnerId.flatMap(m.colorOf)
-        repo.recordResult(matchId, winnerMatchColor).map:
+      case Some(s) =>
+        // Convert winner userId to series color
+        val winnerSeriesColor = winnerId.flatMap(s.colorOf)
+        repo.recordResult(seriesId, winnerSeriesColor).map:
           case Some(updated) if updated.isFinished =>
-            Bus.pub(MatchFinished(updated))
+            Bus.pub(SeriesFinished(updated))
           case Some(updated) =>
-            Bus.pub(MatchGameFinished(updated, gameId, winnerId))
+            Bus.pub(SeriesGameFinished(updated, gameId, winnerId))
           case _ => ()
 
-  def createNextGame(matchId: MatchId): Fu[Option[Game]] =
-    repo.byId(matchId).flatMap:
+  def createNextGame(seriesId: SeriesId): Fu[Option[Game]] =
+    repo.byId(seriesId).flatMap:
       case None => fuccess(None)
-      case Some(m) =>
-        if m.isFinished || m.currentRound > Match.bestOf then fuccess(None)
+      case Some(s) =>
+        if s.isFinished || s.currentRound > Series.bestOf then fuccess(None)
         else
-          val colorMapping = m.colorForRound(m.currentRound)
-          val initialFen = m.openingForRound(m.currentRound).map(_.fen)
+          val colorMapping = s.colorForRound(s.currentRound)
+          val initialFen = s.openingForRound(s.currentRound).map(_.fen)
           for
-            whiteUser <- userApi.byIdWithPerf(colorMapping.white, m.perfType)
-            blackUser <- userApi.byIdWithPerf(colorMapping.black, m.perfType)
-            game <- makeGame(m, whiteUser, blackUser)
+            whiteUser <- userApi.byIdWithPerf(colorMapping.white, s.perfType)
+            blackUser <- userApi.byIdWithPerf(colorMapping.black, s.perfType)
+            game <- makeGame(s, whiteUser, blackUser)
             _ <- gameRepo.insertDenormalized(game, initialFen)
-            _ <- repo.addGame(m.id, game.id)
+            _ <- repo.addGame(s.id, game.id)
             _ <- onStart.exec(game.id)
           yield Some(game)
 
   private def makeGame(
-      m: Match,
+      s: Series,
       whiteUser: GameUser,
       blackUser: GameUser
   )(using idGenerator: lila.core.game.IdGenerator): Fu[Game] =
     idGenerator.game.dmap: id =>
       // 현재 라운드의 오프닝 가져오기
-      val opening = m.openingForRound(m.currentRound)
+      val opening = s.openingForRound(s.currentRound)
       val initialFen = opening.map(_.fen)
 
       // FEN으로 게임 생성 (FromPosition variant 사용)
@@ -84,18 +84,18 @@ final class MatchApi(
                 position = sit.position,
                 ply = sit.ply,
                 startedAtPly = sit.ply,
-                clock = chess.Clock(m.clock).some
+                clock = chess.Clock(s.clock).some
               )
             case None =>
               // FEN 파싱 실패 시 폴백
               chess.Game(
-                position = m.variant.initialPosition,
-                clock = chess.Clock(m.clock).some
+                position = s.variant.initialPosition,
+                clock = chess.Clock(s.clock).some
               )
         case None =>
           chess.Game(
-            position = m.variant.initialPosition,
-            clock = chess.Clock(m.clock).some
+            position = s.variant.initialPosition,
+            clock = chess.Clock(s.clock).some
           )
 
       lila.core.game
@@ -112,11 +112,11 @@ final class MatchApi(
         .withId(id)
         .copy(
           metadata = lila.core.game.newMetadata(lila.core.game.Source.Friend).copy(
-            matchId = m.id.some
+            seriesId = s.id.some
           )
         )
         .start
 
 // Events
-case class MatchFinished(m: Match)
-case class MatchGameFinished(m: Match, gameId: GameId, winnerId: Option[UserId])
+case class SeriesFinished(s: Series)
+case class SeriesGameFinished(s: Series, gameId: GameId, winnerId: Option[UserId])

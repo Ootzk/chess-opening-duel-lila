@@ -13,7 +13,7 @@ object Lilaism extends LilaLibraryExtensions:
     TourId,
     SimulId,
     SwissId,
-    MatchId,
+    SeriesId,
     ForumPostId,
     UblogPostId,
     RoomId

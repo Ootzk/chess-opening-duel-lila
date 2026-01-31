@@ -9,14 +9,14 @@ export interface GameData {
   tournament?: Tournament;
   simul?: Simul;
   swiss?: Swiss;
-  match?: Match;
+  series?: Series;
   takebackable: boolean;
   moretimeable: boolean;
   clock?: Clock;
   correspondence?: CorrespondenceClock;
 }
 
-export interface Match {
+export interface Series {
   id: string;
   round: number;
   bestOf: number;

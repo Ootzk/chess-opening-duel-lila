@@ -26,7 +26,7 @@ final class Env(
     setupForm: lila.core.setup.SetupForm,
     oauthServer: lila.oauth.OAuthServer,
     baseUrl: BaseUrl,
-    matchApi: lila.`match`.MatchApi
+    seriesApi: lila.series.SeriesApi
 )(using
     scheduler: Scheduler
 )(using

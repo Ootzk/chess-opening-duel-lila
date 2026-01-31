@@ -1,4 +1,4 @@
-package lila.`match`
+package lila.series
 
 import com.softwaremill.macwire.*
 import play.api.Configuration
@@ -22,30 +22,30 @@ final class Env(
     lila.core.game.IdGenerator
 ):
 
-  private val matchColl: Coll = db(CollName("match"))
+  private val seriesColl: Coll = db(CollName("series"))
 
-  lazy val repo: MatchRepo = wire[MatchRepo]
+  lazy val repo: SeriesRepo = wire[SeriesRepo]
 
-  lazy val api: MatchApi = wire[MatchApi]
+  lazy val api: SeriesApi = wire[SeriesApi]
 
-  lazy val jsonView: MatchJson = wire[MatchJson]
+  lazy val jsonView: SeriesJson = wire[SeriesJson]
 
   // Subscribe to game finish events
   Bus.sub[lila.core.game.FinishGame]:
     case lila.core.game.FinishGame(game, _) =>
-      game.metadata.matchId.foreach: matchId =>
-        api.finishGame(matchId, game.id, game.winnerUserId)
+      game.metadata.seriesId.foreach: seriesId =>
+        api.finishGame(seriesId, game.id, game.winnerUserId)
 
-  // When a match game finishes but match continues, create next game and redirect players
-  Bus.sub[MatchGameFinished]:
-    case MatchGameFinished(m, oldGameId, _) =>
-      api.createNextGame(m.id).foreach:
+  // When a series game finishes but series continues, create next game and redirect players
+  Bus.sub[SeriesGameFinished]:
+    case SeriesGameFinished(s, oldGameId, _) =>
+      api.createNextGame(s.id).foreach:
         case Some(newGame) =>
           Bus.pub(lila.game.actorApi.NotifyRematch(oldGameId, newGame))
         case None => ()
 
-  // When match is finished
-  Bus.sub[MatchFinished]:
-    case MatchFinished(m) =>
-      // TODO: Could send match result notification here
+  // When series is finished
+  Bus.sub[SeriesFinished]:
+    case SeriesFinished(s) =>
+      // TODO: Could send series result notification here
       ()

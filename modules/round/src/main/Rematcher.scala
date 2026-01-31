@@ -44,7 +44,7 @@ final private class Rematcher(
       g.nonMandatory &&
       !g.hasRule(_.noRematch) &&
       !g.boosted &&
-      g.metadata.matchId.isEmpty && // Match games use automatic next game, not rematch
+      g.metadata.seriesId.isEmpty && // Series games use automatic next game, not rematch
       !(g.hasAi && g.variant == FromPosition && g.clock.exists(_.config.limitSeconds < 60))
 
   def yes(pov: Pov): Fu[Events] =

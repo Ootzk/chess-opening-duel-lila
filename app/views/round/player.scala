@@ -12,7 +12,7 @@ def player(
     tour: Option[lila.tournament.GameView],
     simul: Option[lila.simul.Simul],
     cross: Option[lila.game.Crosstable.WithMatchup],
-    matchGame: Option[lila.`match`.Match],
+    seriesGame: Option[lila.series.Series],
     playing: List[Pov],
     chatOption: Option[lila.chat.Chat.GameOrEvent],
     bookmarked: Boolean
@@ -68,8 +68,8 @@ def player(
         ),
         ui.roundAppPreload(pov),
         div(cls := "round__underboard")(
-          matchGame
-            .map(m => views.`match`.ui.matchScore(m, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(m.colorOf))))
+          seriesGame
+            .map(s => views.series.ui.seriesScore(s, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(s.colorOf))))
             .orElse(views.game.ui.crosstable.option(cross, pov.game)),
           (playing.nonEmpty || simul.exists(_.isHost(ctx.me))).option(
             div(cls := "round__now-playing")(

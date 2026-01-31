@@ -4,35 +4,35 @@ import chess.format.Fen
 import chess.variant.Variant
 import chess.{ Position, ByColor, Rated }
 
-import lila.core.id.MatchId
+import lila.core.id.SeriesId
 import lila.core.user.GameUser
-import lila.`match`.Match
+import lila.series.Series
 
 final private class ChallengeJoiner(
     gameRepo: lila.game.GameRepo,
     userApi: lila.core.user.UserApi,
     onStart: lila.core.game.OnStart,
-    matchApi: lila.`match`.MatchApi
+    seriesApi: lila.series.SeriesApi
 )(using Executor, Scheduler):
 
   def apply(c: Challenge, destUser: GameUser): FuRaise[String, Pov] = for
     exists <- gameRepo.exists(c.gameId)
     _ <- raiseIf(exists)("The challenge has already been accepted")
     origUser <- c.challengerUserId.so(userApi.byIdWithPerf(_, c.perfType))
-    matchOpt <- createMatchIfNeeded(c, origUser, destUser)
-    initialFen = matchOpt.flatMap(_.openingForRound(1)).map(_.fen)
-    game = ChallengeJoiner.createGame(c, origUser, destUser, matchOpt.map(_.id), initialFen)
+    seriesOpt <- createSeriesIfNeeded(c, origUser, destUser)
+    initialFen = seriesOpt.flatMap(_.openingForRound(1)).map(_.fen)
+    game = ChallengeJoiner.createGame(c, origUser, destUser, seriesOpt.map(_.id), initialFen)
     _ <- gameRepo.insertDenormalized(game, initialFen)
-    _ <- matchOpt.map(_.id).so(mid => matchApi.addFirstGame(mid, game.id))
+    _ <- seriesOpt.map(_.id).so(sid => seriesApi.addFirstGame(sid, game.id))
     _ <- onStartOrRetry(game.id).recover: _ =>
       logger.error(s"onStart failed for game ${game.id}")
   yield Pov(game, !c.finalColor)
 
-  private def createMatchIfNeeded(
+  private def createSeriesIfNeeded(
       c: Challenge,
       origUser: GameUser,
       destUser: GameUser
-  ): Fu[Option[Match]] =
+  ): Fu[Option[Series]] =
     c.matchType match
       case Some(Challenge.MatchType.OpeningDuel) =>
         (origUser.map(_.id), destUser.map(_.id)).tupled match
@@ -44,9 +44,9 @@ final private class ChallengeJoiner(
             val clock = c.timeControl match
               case Challenge.TimeControl.Clock(config) => config
               case _ => chess.Clock.Config(chess.Clock.LimitSeconds(300), chess.Clock.IncrementSeconds(0))
-            matchApi.create(players, c.variant, clock).map(_.some)
-          case None => fuccess(none[Match]) // Anonymous players can't play matches
-      case _ => fuccess(none[Match])
+            seriesApi.create(players, c.variant, clock).map(_.some)
+          case None => fuccess(none[Series]) // Anonymous players can't play series
+      case _ => fuccess(none[Series])
 
   private def onStartOrRetry(id: GameId, retries: Int = 3): Funit =
     onStart
@@ -63,12 +63,12 @@ private object ChallengeJoiner:
       c: Challenge,
       origUser: GameUser,
       destUser: GameUser,
-      matchId: Option[MatchId] = None,
-      matchInitialFen: Option[Fen.Full] = None  // Match의 오프닝 FEN
+      seriesId: Option[SeriesId] = None,
+      seriesInitialFen: Option[Fen.Full] = None  // Series의 오프닝 FEN
   ): Game =
-    // Match 게임이면 Match의 오프닝 FEN 사용, 아니면 Challenge의 initialFen 사용
-    val effectiveFen = matchInitialFen.orElse(c.initialFen)
-    val effectiveVariant = if matchInitialFen.isDefined then chess.variant.FromPosition else c.variant
+    // Series 게임이면 Series의 오프닝 FEN 사용, 아니면 Challenge의 initialFen 사용
+    val effectiveFen = seriesInitialFen.orElse(c.initialFen)
+    val effectiveVariant = if seriesInitialFen.isDefined then chess.variant.FromPosition else c.variant
     val (chessGame, state) = gameSetup(effectiveVariant, c.timeControl, effectiveFen)
     val game = lila.core.game
       .newGame(
@@ -83,7 +83,7 @@ private object ChallengeJoiner:
       )
       .withId(c.gameId)
       .pipe(addGameHistory(state))
-    matchId.fold(game)(mid => game.copy(metadata = game.metadata.copy(matchId = mid.some))).start
+    seriesId.fold(game)(sid => game.copy(metadata = game.metadata.copy(seriesId = sid.some))).start
 
   def gameSetup(
       variant: Variant,

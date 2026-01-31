@@ -1,50 +1,50 @@
-package views.`match`
+package views.series
 
 import chess.Color
 
 import lila.app.UiEnv.{ *, given }
-import lila.`match`.Match
-import lila.`match`.OpeningPreset
+import lila.series.Series
+import lila.series.OpeningPreset
 import lila.core.id.GameId
 import lila.core.game.Game
 
 object ui:
 
   // currentGameResult: 현재 게임이 끝났으면 그 결과 (race condition 해결용)
-  def matchScore(m: Match, currentGameId: Option[GameId], currentGameResult: Option[Option[Color]] = None)(using ctx: Context) =
+  def seriesScore(s: Series, currentGameId: Option[GameId], currentGameResult: Option[Option[Color]] = None)(using ctx: Context) =
     // POV: 로그인한 유저 기준
-    val povColor = ctx.userId.flatMap(m.colorOf).getOrElse(Color.White)
+    val povColor = ctx.userId.flatMap(s.colorOf).getOrElse(Color.White)
 
-    div(cls := "match-score")(
-      table(cls := "match-score__table")(
+    div(cls := "series-score")(  // Keep CSS class for compatibility
+      table(cls := "series-score__table")(
         thead(
           tr(
-            th(cls := "match-score__header-game")("Game"),
-            th(cls := "match-score__header-me")(userIdLink(m.players(povColor).some, withOnline = true)),
-            th(cls := "match-score__header-opp")(userIdLink(m.players(!povColor).some, withOnline = true)),
-            th(cls := "match-score__header-opening")("Opening")
+            th(cls := "series-score__header-game")("Game"),
+            th(cls := "series-score__header-me")(userIdLink(s.players(povColor).some, withOnline = true)),
+            th(cls := "series-score__header-opp")(userIdLink(s.players(!povColor).some, withOnline = true)),
+            th(cls := "series-score__header-opening")("Opening")
           )
         ),
         tbody(
-          m.openings.zipWithIndex.map: (opening, idx) =>
+          s.openings.zipWithIndex.map: (opening, idx) =>
             val round = idx + 1
-            val gid = m.gameIds.lift(idx)
-            // Match의 results를 먼저 확인, 없으면 현재 게임 결과 사용
-            val result = m.results.lift(idx).orElse(
+            val gid = s.gameIds.lift(idx)
+            // Series의 results를 먼저 확인, 없으면 현재 게임 결과 사용
+            val result = s.results.lift(idx).orElse(
               gid.filter(currentGameId.contains).flatMap(_ => currentGameResult)
             )
             val isCurrent = gid.exists(currentGameId.contains)
             val isInProgress = result.isEmpty && isCurrent
 
-            tr(cls := List("match-score__row" -> true, "current" -> isCurrent))(
-              td(cls := "match-score__game")(s"$round"),
-              td(cls := "match-score__result")(
+            tr(cls := List("series-score__row" -> true, "current" -> isCurrent))(
+              td(cls := "series-score__game")(s"$round"),
+              td(cls := "series-score__result")(
                 resultCell(povColor, result, isInProgress, gid)
               ),
-              td(cls := "match-score__result")(
+              td(cls := "series-score__result")(
                 resultCell(!povColor, result, isInProgress, gid)
               ),
-              td(cls := "match-score__opening")(
+              td(cls := "series-score__opening")(
                 gid.fold(span(opening.name)): id =>
                   a(href := routes.Round.watcher(id, Color.white))(opening.name)
               )
@@ -52,9 +52,9 @@ object ui:
         )
       ),
       // 현재 오프닝 라벨
-      div(cls := "match-score__label")(
-        m.openingForRound(m.currentRound).fold(
-          s"Opening Duel - Game ${m.currentRound} of ${m.bestOf}"
+      div(cls := "series-score__label")(
+        s.openingForRound(s.currentRound).fold(
+          s"Opening Duel - Game ${s.currentRound} of ${s.bestOf}"
         )(op => s"Opening Duel - ${op.name}")
       )
     )
@@ -81,5 +81,5 @@ object ui:
           span(cls := "pending")("-")
 
   // 외부에서 사용할 간단한 wrapper
-  def option(matchGame: Option[Match], currentGameId: Option[GameId])(using Context) =
-    matchGame.map(m => matchScore(m, currentGameId))
+  def option(seriesGame: Option[Series], currentGameId: Option[GameId])(using Context) =
+    seriesGame.map(s => seriesScore(s, currentGameId))

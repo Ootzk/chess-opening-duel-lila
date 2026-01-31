@@ -74,7 +74,7 @@ lazy val modules = Seq(
   // level 7
   // everything else is free from deps; do the big ones first
   relay, security, tournament, plan, round,
-  swiss, `match`, insight, fishnet, tutor, mod, challenge, web,
+  swiss, series, insight, fishnet, tutor, mod, challenge, web,
   team, forum, streamer, simul, activity, msg, ublog,
   notifyModule, clas, perfStat, opening, timeline,
   setup, video, fide, title, push,
@@ -320,7 +320,7 @@ lazy val swiss = module("swiss",
   Seq(lettuce) ++ tests.bundle
 )
 
-lazy val `match` = module("match",
+lazy val series = module("series",
   Seq(game, memo),
   Seq(lettuce)
 )
@@ -356,7 +356,7 @@ lazy val shutup = module("shutup",
 )
 
 lazy val challenge = module("challenge",
-  Seq(game, room, oauth, `match`),
+  Seq(game, room, oauth, series),
   Seq(lettuce, catsMtl) ++ tests.bundle
 )
 

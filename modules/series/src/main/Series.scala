@@ -1,4 +1,4 @@
-package lila.`match`
+package lila.series
 
 import chess.Clock.Config as ClockConfig
 import chess.format.Fen
@@ -6,18 +6,18 @@ import chess.{ ByColor, Color }
 import reactivemongo.api.bson.Macros.Annotations.Key
 import scalalib.ThreadLocalRandom
 
-import lila.core.id.{ GameId, MatchId }
+import lila.core.id.{ GameId, SeriesId }
 import lila.core.userId.UserId
 import lila.rating.PerfType
 
-case class Match(
-    @Key("_id") id: MatchId,
+case class Series(
+    @Key("_id") id: SeriesId,
     players: ByColor[UserId],
     scores: ByColor[Int],
     gameIds: List[GameId],
     results: List[Option[Color]], // 각 게임 승자 색상 (None=무승부)
     currentRound: Int,
-    status: Match.Status,
+    status: Series.Status,
     winner: Option[Color],
     variant: chess.variant.Variant,
     clock: ClockConfig,
@@ -25,12 +25,12 @@ case class Match(
     createdAt: Instant,
     finishedAt: Option[Instant]
 ):
-  def isCreated = status == Match.Status.Created
-  def isStarted = status == Match.Status.Started
-  def isFinished = status == Match.Status.Finished
+  def isCreated = status == Series.Status.Created
+  def isStarted = status == Series.Status.Started
+  def isFinished = status == Series.Status.Finished
   def isNotFinished = !isFinished
 
-  def bestOf = Match.bestOf
+  def bestOf = Series.bestOf
 
   def speed = chess.Speed(clock)
   def perfType: PerfType = lila.rating.PerfType(variant, speed)
@@ -64,13 +64,13 @@ case class Match(
     if round % 2 == 1 then players
     else players.swap
 
-  def addGame(gameId: GameId): Match =
+  def addGame(gameId: GameId): Series =
     copy(
       gameIds = gameIds :+ gameId,
-      status = if status == Match.Status.Created then Match.Status.Started else status
+      status = if status == Series.Status.Created then Series.Status.Started else status
     )
 
-  def recordResult(winnerColor: Option[Color]): Match =
+  def recordResult(winnerColor: Option[Color]): Series =
     val newScores = winnerColor match
       case Some(color) => scores.update(color, _ + 1)
       case None        => scores // draw doesn't count
@@ -79,12 +79,12 @@ case class Match(
       scores = newScores,
       results = results :+ winnerColor,
       currentRound = if finished then currentRound else currentRound + 1,
-      status = if finished then Match.Status.Finished else status,
+      status = if finished then Series.Status.Finished else status,
       winner = if finished then Some(if newScores.white >= winsNeeded then Color.White else Color.Black) else None,
       finishedAt = if finished then Some(nowInstant) else None
     )
 
-object Match:
+object Series:
 
   val bestOf = 5
   val winsNeeded = 3
@@ -97,13 +97,13 @@ object Match:
   object Status:
     def apply(id: Int): Option[Status] = values.find(_.id == id)
 
-  def makeId: MatchId = MatchId(ThreadLocalRandom.nextString(8))
+  def makeId: SeriesId = SeriesId(ThreadLocalRandom.nextString(8))
 
   def make(
       players: ByColor[UserId],
       variant: chess.variant.Variant,
       clock: ClockConfig
-  ): Match = Match(
+  ): Series = Series(
     id = makeId,
     players = players,
     scores = ByColor.fill(0),
