@@ -87,6 +87,61 @@ final class Setup(
             yield result
         )
 
+  def openingDuel(userId: Option[UserStr]) =
+    OpenBody: ctx ?=>
+      limit.setupPost(ctx.ip, rateLimited):
+        bindForm(forms.friend)(
+          doubleJsonFormError,
+          config =>
+            for
+              origUser <- ctx.user.traverse(env.user.perfsRepo.withPerf(_, config.perfType))
+              destUser <- userId.so(env.user.api.enabledWithPerf(_, config.perfType))
+              denied <- destUser.so(u => env.challenge.granter.isDenied(u.user, config.perfKey.some))
+              result <- denied match
+                case Some(denied) =>
+                  val message = lila.challenge.ChallengeDenied.translated(denied)
+                  negotiate(
+                    forbiddenJson(message),
+                    JsonBadRequest(message)
+                  )
+                case None =>
+                  import lila.challenge.Challenge.*
+                  origUser match
+                    case Some(orig) =>
+                      val challenger = toRegistered(orig)
+                      val timeControl = makeTimeControl(config.makeClock, none) // No correspondence for matches
+                      val challenge = lila.challenge.Challenge.make(
+                        variant = config.variant,
+                        initialFen = config.fen,
+                        timeControl = timeControl,
+                        rated = chess.Rated.No, // Opening Duel is always casual
+                        color = config.color.name,
+                        challenger = challenger,
+                        destUser = destUser,
+                        rematchOf = none,
+                        matchType = MatchType.OpeningDuel.some
+                      )
+                      env.challenge.api
+                        .create(challenge)
+                        .flatMap:
+                          if _ then
+                            negotiate(
+                              Redirect(routes.Round.watcher(challenge.gameId, Color.white)),
+                              challengeC.showChallenge(challenge, justCreated = true)
+                            )
+                          else
+                            negotiate(
+                              Redirect(routes.Lobby.home),
+                              JsonBadRequest("Challenge not created")
+                            )
+                    case None =>
+                      negotiate(
+                        forbiddenJson("You must be logged in to create an Opening Duel"),
+                        JsonBadRequest("You must be logged in to create an Opening Duel")
+                      )
+            yield result
+        )
+
   private def hookResponse(res: HookResult) = res match
     case HookResult.Created(id) =>
       JsonOk:

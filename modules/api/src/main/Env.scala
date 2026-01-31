@@ -37,6 +37,7 @@ final class Env(
     swissEnv: lila.swiss.Env,
     onlineApiUsers: lila.bot.OnlineApiUsers,
     challengeEnv: lila.challenge.Env,
+    matchApi: lila.`match`.MatchApi,
     socketEnv: lila.socket.Env,
     msgEnv: lila.msg.Env,
     pushEnv: lila.push.Env,
