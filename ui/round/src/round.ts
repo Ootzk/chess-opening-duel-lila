@@ -82,7 +82,13 @@ async function boot(
           const $html = $(html),
             $meta = $html.find('.game__meta');
           $meta.length && $('.game__meta').replaceWith($meta);
-          $('.crosstable').replaceWith($html.find('.crosstable'));
+          // Replace crosstable or match-score (for Opening Duel matches)
+          const $matchScore = $html.find('.match-score');
+          if ($matchScore.length) {
+            $('.match-score').replaceWith($matchScore);
+          } else {
+            $('.crosstable').replaceWith($html.find('.crosstable'));
+          }
           startTournamentClock();
           pubsub.emit('content-loaded');
         });

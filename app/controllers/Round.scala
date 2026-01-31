@@ -36,11 +36,12 @@ final class Round(
           else
             PreventTheft(pov):
               for
-                (simul, chatOption, crosstable, playing, bookmarked, data) <-
+                (simul, chatOption, crosstable, matchGame, playing, bookmarked, data) <-
                   (
                     pov.game.simulId.so(env.simul.repo.find),
                     getPlayerChat(pov.game, tour.map(_.tour)),
                     ctx.noBlind.so(env.game.crosstableApi.withMatchup(pov.game)),
+                    pov.game.metadata.matchId.so(env.`match`.api.byId),
                     pov.game.isSwitchable.so(otherPovs(pov.game)),
                     env.bookmark.api.exists(pov.game, ctx.me),
                     env.api.roundApi.player(pov, Preload(users), tour)
@@ -53,6 +54,7 @@ final class Round(
                     tour = tour,
                     simul = simul,
                     cross = crosstable,
+                    matchGame = matchGame,
                     playing = playing,
                     chatOption = chatOption,
                     bookmarked = bookmarked
@@ -157,6 +159,7 @@ final class Round(
                     simul <- pov.game.simulId.so(env.simul.repo.find)
                     chat <- getWatcherChat(pov.game)
                     crosstable <- ctx.noBlind.so(env.game.crosstableApi.withMatchup(pov.game))
+                    matchGame <- pov.game.metadata.matchId.so(env.`match`.api.byId)
                     bookmarked <- env.bookmark.api.exists(pov.game, ctx.me)
                     tv = userTv.map: u =>
                       lila.round.OnTv.User(u.id)
@@ -168,6 +171,7 @@ final class Round(
                         tour.map(_.tourAndTeamVs),
                         simul,
                         crosstable,
+                        matchGame = matchGame,
                         userTv = userTv,
                         chatOption = chat,
                         bookmarked = bookmarked
@@ -250,9 +254,10 @@ final class Round(
         pov.game.simulId.so(env.simul.repo.find),
         env.game.gameRepo.initialFen(pov.game),
         env.game.crosstableApi.withMatchup(pov.game),
+        pov.game.metadata.matchId.so(env.`match`.api.byId),
         env.bookmark.api.exists(pov.game, ctx.me)
-      ).flatMapN: (tour, simul, initialFen, crosstable, bookmarked) =>
-        Snippet(views.game.sides(pov, initialFen, tour, crosstable, simul, bookmarked = bookmarked))
+      ).flatMapN: (tour, simul, initialFen, crosstable, matchGame, bookmarked) =>
+        Snippet(views.game.sides(pov, initialFen, tour, crosstable, matchGame, simul, bookmarked = bookmarked))
 
   def writeNote(gameId: GameId) = AuthBody { ctx ?=> me ?=>
     bindForm(env.round.noteApi.form)(

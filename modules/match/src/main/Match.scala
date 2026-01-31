@@ -15,6 +15,7 @@ case class Match(
     players: ByColor[UserId],
     scores: ByColor[Int],
     gameIds: List[GameId],
+    results: List[Option[Color]], // 각 게임 승자 색상 (None=무승부)
     currentRound: Int,
     status: Match.Status,
     winner: Option[Color],
@@ -44,6 +45,10 @@ case class Match(
 
   def currentGame: Option[GameId] = gameIds.lastOption
 
+  // 게임 ID와 결과를 짝지어 반환 (UI용)
+  def gamesWithResults: List[(GameId, Option[Color])] =
+    gameIds.zipAll(results, GameId(""), None).filter(_._1.value.nonEmpty)
+
   def winsNeeded: Int = (bestOf / 2) + 1
 
   def hasEnded: Boolean = scores.white >= winsNeeded || scores.black >= winsNeeded
@@ -65,6 +70,7 @@ case class Match(
     val finished = newScores.white >= winsNeeded || newScores.black >= winsNeeded
     copy(
       scores = newScores,
+      results = results :+ winnerColor,
       currentRound = if finished then currentRound else currentRound + 1,
       status = if finished then Match.Status.Finished else status,
       winner = if finished then Some(if newScores.white >= winsNeeded then Color.White else Color.Black) else None,
@@ -96,6 +102,7 @@ object Match:
     players = players,
     scores = ByColor.fill(0),
     gameIds = Nil,
+    results = Nil,
     currentRound = 1,
     status = Status.Created,
     winner = None,

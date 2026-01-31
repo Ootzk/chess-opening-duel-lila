@@ -10,14 +10,17 @@ def sides(
     initialFen: Option[chess.format.Fen.Full],
     tour: Option[lila.tournament.TourAndTeamVs],
     cross: Option[lila.game.Crosstable.WithMatchup],
+    matchGame: Option[lila.`match`.Match],
     simul: Option[lila.simul.Simul],
     userTv: Option[User] = None,
     bookmarked: Boolean
 )(using ctx: Context) =
   div(
     side.meta(pov, initialFen, tour, simul, userTv, bookmarked = bookmarked),
-    cross.map: c =>
-      div(cls := "crosstable")(ui.crosstable(ctx.userId.foldLeft(c)(_.fromPov(_)), pov.gameId.some))
+    matchGame
+      .map(m => views.`match`.ui.matchScore(m, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(m.colorOf))))
+      .orElse(cross.map: c =>
+        div(cls := "crosstable")(ui.crosstable(ctx.userId.foldLeft(c)(_.fromPov(_)), pov.gameId.some)))
   )
 
 def widgets(
