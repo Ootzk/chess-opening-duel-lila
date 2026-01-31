@@ -34,6 +34,11 @@ object BsonHandlers:
     { s => BSONInteger(s.id) }
   )
 
+  given BSONHandler[Series.Phase] = lila.db.dsl.quickHandler(
+    { case BSONInteger(id) => Series.Phase(id).getOrElse(Series.Phase.Picking) },
+    { p => BSONInteger(p.id) }
+  )
+
   // results 필드용: Option[Color] -> Option[Boolean] (white=true, black=false, draw=None)
   private def readResults(list: List[BSONValue]): List[Option[Color]] =
     list.map:
@@ -52,6 +57,8 @@ object BsonHandlers:
       val playersList = r.get[List[UserId]]("p")
       val scoresList = r.get[List[Int]]("sc")
       val resultsList = r.getO[List[BSONValue]]("rs").getOrElse(Nil)
+      val picksList = r.getO[List[List[OpeningPreset]]]("pk").getOrElse(List(Nil, Nil))
+      val bansList = r.getO[List[List[OpeningPreset]]]("bn").getOrElse(List(Nil, Nil))
       Series(
         id = r.get[SeriesId]("_id"),
         players = ByColor(playersList.head, playersList.last),
@@ -60,6 +67,9 @@ object BsonHandlers:
         results = readResults(resultsList),
         currentRound = r.get[Int]("r"),
         status = r.get[Series.Status]("s"),
+        phase = r.getO[Series.Phase]("ph").getOrElse(Series.Phase.Picking),
+        picks = ByColor(picksList.headOption.getOrElse(Nil), picksList.lastOption.getOrElse(Nil)),
+        bans = ByColor(bansList.headOption.getOrElse(Nil), bansList.lastOption.getOrElse(Nil)),
         winner = r.getO[Boolean]("w").map(Color.fromWhite),
         variant = r.get[chess.variant.Variant]("v"),
         clock = r.get[chess.Clock.Config]("c"),
@@ -76,6 +86,9 @@ object BsonHandlers:
         "rs" -> writeResults(o.results),
         "r" -> o.currentRound,
         "s" -> o.status,
+        "ph" -> o.phase,
+        "pk" -> List(o.picks.white, o.picks.black),
+        "bn" -> List(o.bans.white, o.bans.black),
         "w" -> o.winner.map(_.white),
         "v" -> o.variant,
         "c" -> o.clock,

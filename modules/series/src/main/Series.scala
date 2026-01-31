@@ -18,10 +18,13 @@ case class Series(
     results: List[Option[Color]], // 각 게임 승자 색상 (None=무승부)
     currentRound: Int,
     status: Series.Status,
+    phase: Series.Phase,                 // 밴픽 단계
+    picks: ByColor[List[OpeningPreset]], // 각 플레이어가 픽한 오프닝 (최대 5개)
+    bans: ByColor[List[OpeningPreset]],  // 각 플레이어가 밴한 상대 오프닝 (최대 2개)
     winner: Option[Color],
     variant: chess.variant.Variant,
     clock: ClockConfig,
-    openings: List[OpeningPreset], // 각 게임의 오프닝 (bestOf 개수)
+    openings: List[OpeningPreset], // 각 게임의 오프닝 (밴픽 후 결정)
     createdAt: Instant,
     finishedAt: Option[Instant]
 ):
@@ -84,6 +87,34 @@ case class Series(
       finishedAt = if finished then Some(nowInstant) else None
     )
 
+  // 밴픽 관련 헬퍼 메서드
+
+  // 플레이어의 남은 픽 (상대에게 밴되지 않은 것)
+  def remainingPicks(color: Color): List[OpeningPreset] =
+    val myPicks = picks(color)
+    val opponentBans = bans(!color)
+    myPicks.filterNot(p => opponentBans.exists(_.name == p.name))
+
+  // 밴된 모든 오프닝 (양측 합산)
+  def bannedOpenings: List[OpeningPreset] =
+    bans.white ++ bans.black
+
+  // 픽 설정
+  def setPicks(color: Color, newPicks: List[OpeningPreset]): Series =
+    copy(picks = picks.update(color, _ => newPicks))
+
+  // 밴 설정
+  def setBans(color: Color, newBans: List[OpeningPreset]): Series =
+    copy(bans = bans.update(color, _ => newBans))
+
+  // 페이즈 변경
+  def setPhase(newPhase: Series.Phase): Series =
+    copy(phase = newPhase)
+
+  // 오프닝 추가 (게임 시작 시)
+  def addOpening(opening: OpeningPreset): Series =
+    copy(openings = openings :+ opening)
+
 object Series:
 
   val bestOf = 5
@@ -96,6 +127,18 @@ object Series:
 
   object Status:
     def apply(id: Int): Option[Status] = values.find(_.id == id)
+
+  // 밴픽 단계
+  enum Phase(val id: Int):
+    case Picking extends Phase(10)        // 각자 5개 오프닝 픽
+    case Banning extends Phase(20)        // 상대 픽 중 2개 밴
+    case Game1Shuffling extends Phase(25) // Game 1 랜덤 선택 애니메이션 (10초)
+    case Playing extends Phase(30)        // 게임 진행 중
+    case Selecting extends Phase(40)      // 패자가 다음 오프닝 선택 (Game 2+)
+    case Finished extends Phase(50)       // 시리즈 종료
+
+  object Phase:
+    def apply(id: Int): Option[Phase] = values.find(_.id == id)
 
   def makeId: SeriesId = SeriesId(ThreadLocalRandom.nextString(8))
 
@@ -111,10 +154,13 @@ object Series:
     results = Nil,
     currentRound = 1,
     status = Status.Created,
+    phase = Phase.Picking,
+    picks = ByColor.fill(Nil),
+    bans = ByColor.fill(Nil),
     winner = None,
     variant = variant,
     clock = clock,
-    openings = OpeningPresets.randomN(bestOf),
+    openings = Nil, // 밴픽 완료 후 결정
     createdAt = nowInstant,
     finishedAt = None
   )

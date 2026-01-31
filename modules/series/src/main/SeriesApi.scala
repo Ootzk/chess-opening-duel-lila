@@ -32,6 +32,91 @@ final class SeriesApi(
 
   def byGameId(gameId: GameId): Fu[Option[Series]] = repo.byGameId(gameId)
 
+  // 밴픽 관련 메서드
+
+  // 플레이어의 픽 설정 (최대 5개)
+  def setPicks(seriesId: SeriesId, userId: UserId, picks: List[OpeningPreset]): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.colorOf(userId) match
+          case None => fuccess(None)
+          case Some(color) =>
+            if s.phase != Series.Phase.Picking then fuccess(None)
+            else
+              val limitedPicks = picks.take(5)
+              val updated = s.setPicks(color, limitedPicks)
+              repo.update(updated).inject(Some(updated))
+
+  // 플레이어의 밴 설정 (최대 2개, 상대 픽에서만 선택 가능)
+  def setBans(seriesId: SeriesId, userId: UserId, bans: List[OpeningPreset]): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.colorOf(userId) match
+          case None => fuccess(None)
+          case Some(color) =>
+            if s.phase != Series.Phase.Banning then fuccess(None)
+            else
+              // 상대방의 픽에서만 밴 가능
+              val opponentPicks = s.picks(!color)
+              val validBans = bans.filter(b => opponentPicks.exists(_.name == b.name)).take(2)
+              val updated = s.setBans(color, validBans)
+              repo.update(updated).inject(Some(updated))
+
+  // 픽 확정 및 페이즈 전환 (양측 픽 완료 시)
+  def confirmPicks(seriesId: SeriesId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        if s.phase != Series.Phase.Picking then fuccess(None)
+        else if s.picks.white.isEmpty || s.picks.black.isEmpty then fuccess(None)
+        else
+          val updated = s.setPhase(Series.Phase.Banning)
+          repo.update(updated).inject(Some(updated))
+
+  // 밴 확정 및 페이즈 전환 (양측 밴 완료 시)
+  def confirmBans(seriesId: SeriesId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        if s.phase != Series.Phase.Banning then fuccess(None)
+        else if s.bans.white.isEmpty || s.bans.black.isEmpty then fuccess(None)
+        else
+          val updated = s.setPhase(Series.Phase.Game1Shuffling)
+          repo.update(updated).inject(Some(updated))
+
+  // Game 1 오프닝 결정 (밴된 오프닝 중 랜덤)
+  def selectGame1Opening(seriesId: SeriesId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        if s.phase != Series.Phase.Game1Shuffling then fuccess(None)
+        else
+          val bannedOpenings = s.bannedOpenings
+          if bannedOpenings.isEmpty then fuccess(None)
+          else
+            val selectedOpening = scala.util.Random.shuffle(bannedOpenings).head
+            val updated = s.addOpening(selectedOpening).setPhase(Series.Phase.Playing)
+            repo.update(updated).inject(Some(updated))
+
+  // 패자가 다음 게임 오프닝 선택 (Game 2+)
+  def selectNextOpening(seriesId: SeriesId, userId: UserId, opening: OpeningPreset): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.colorOf(userId) match
+          case None => fuccess(None)
+          case Some(color) =>
+            if s.phase != Series.Phase.Selecting then fuccess(None)
+            else
+              // 자기 남은 픽에서만 선택 가능
+              val remaining = s.remainingPicks(color)
+              if !remaining.exists(_.name == opening.name) then fuccess(None)
+              else
+                val updated = s.addOpening(opening).setPhase(Series.Phase.Playing)
+                repo.update(updated).inject(Some(updated))
+
   def addFirstGame(seriesId: SeriesId, gameId: GameId): Funit =
     repo.addGame(seriesId, gameId)
 
