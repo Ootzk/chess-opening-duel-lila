@@ -29,6 +29,6 @@ final class Match(env: Env) extends LilaController(env):
       else if !m.players.contains(me.userId) then Forbidden("Not a player of this match")
       else
         api.createNextGame(id).map:
-          case Some(gameId) => Redirect(routes.Round.watcher(gameId, Color.white))
-          case None         => Redirect(routes.Match.show(id))
+          case Some(game) => Redirect(routes.Round.watcher(game.id, Color.white))
+          case None       => Redirect(routes.Match.show(id))
   }

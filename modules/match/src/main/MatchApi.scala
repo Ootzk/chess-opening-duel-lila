@@ -44,7 +44,7 @@ final class MatchApi(
         Bus.pub(MatchGameFinished(m, gameId, winnerColor))
       case _ => ()
 
-  def createNextGame(matchId: MatchId): Fu[Option[GameId]] =
+  def createNextGame(matchId: MatchId): Fu[Option[Game]] =
     repo.byId(matchId).flatMap:
       case None => fuccess(None)
       case Some(m) =>
@@ -58,7 +58,7 @@ final class MatchApi(
             _ <- gameRepo.insertDenormalized(game)
             _ <- repo.addGame(m.id, game.id)
             _ <- onStart.exec(game.id)
-          yield Some(game.id)
+          yield Some(game)
 
   private def makeGame(
       m: Match,

@@ -35,3 +35,17 @@ final class Env(
     case lila.core.game.FinishGame(game, _) =>
       game.metadata.matchId.foreach: matchId =>
         api.finishGame(matchId, game.id, game.winnerColor)
+
+  // When a match game finishes but match continues, create next game and redirect players
+  Bus.sub[MatchGameFinished]:
+    case MatchGameFinished(m, oldGameId, _) =>
+      api.createNextGame(m.id).foreach:
+        case Some(newGame) =>
+          Bus.pub(lila.game.actorApi.NotifyRematch(oldGameId, newGame))
+        case None => ()
+
+  // When match is finished
+  Bus.sub[MatchFinished]:
+    case MatchFinished(m) =>
+      // TODO: Could send match result notification here
+      ()
