@@ -471,6 +471,14 @@ GET   /$lang<\w\w\w?>/swiss                   controllers.Swiss.homeLang(lang: L
 GET   /series/$id<\w{8}>                      controllers.Series.show(id: SeriesId)
 GET   /api/series/$id<\w{8}>                  controllers.Series.apiShow(id: SeriesId)
 POST  /series/$id<\w{8}>/next                 controllers.Series.nextGame(id: SeriesId)
+# Series Ban/Pick API
+GET   /api/series/presets                     controllers.Series.presets
+POST  /series/$id<\w{8}>/picks                controllers.Series.setPicks(id: SeriesId)
+POST  /series/$id<\w{8}>/bans                 controllers.Series.setBans(id: SeriesId)
+POST  /series/$id<\w{8}>/confirmPicks         controllers.Series.confirmPicks(id: SeriesId)
+POST  /series/$id<\w{8}>/confirmBans          controllers.Series.confirmBans(id: SeriesId)
+POST  /series/$id<\w{8}>/selectGame1Opening   controllers.Series.selectGame1Opening(id: SeriesId)
+POST  /series/$id<\w{8}>/selectOpening        controllers.Series.selectNextOpening(id: SeriesId)
 
 # Simul
 GET   /simul                                  controllers.Simul.home
