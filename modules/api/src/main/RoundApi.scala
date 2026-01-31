@@ -29,6 +29,7 @@ final private[api] class RoundApi(
     tourApi: lila.tournament.TournamentApi,
     swissApi: lila.swiss.SwissApi,
     simulApi: lila.simul.SimulApi,
+    matchApi: lila.`match`.MatchApi,
     puzzleOpeningApi: lila.puzzle.PuzzleOpeningApi,
     externalEngineApi: lila.analyse.ExternalEngineApi,
     getLightTeam: lila.core.team.LightTeam.GetterSync,
@@ -47,11 +48,12 @@ final private[api] class RoundApi(
       initialFen <- gameRepo.initialFen(pov.game)
       users <- users.orLoad(userApi.gamePlayers(pov.game.userIdPair, pov.game.perfKey))
       prefs <- prefApi.get(users.map(_.map(_.user)), pov.color, ctx.pref)
-      (json, simul, swiss, note, forecast, bookmarked) <-
+      (json, simul, swiss, matchGame, note, forecast, bookmarked) <-
         (
           jsonView.playerJson(pov, prefs, users, initialFen, ctxFlags),
           pov.game.simulId.so(simulApi.find),
           swissApi.gameView(pov),
+          pov.game.metadata.matchId.so(matchApi.byId),
           ctx.myId.ifTrue(ctx.isMobileApi).so(noteApi.get(pov.gameId, _)),
           forecastApi.loadForDisplay(pov),
           bookmarkApi.exists(pov.game, ctx.me)
@@ -60,6 +62,7 @@ final private[api] class RoundApi(
       withTournament(pov, tour)
         .compose(withSwiss(swiss))
         .compose(withSimul(simul))
+        .compose(withMatch(matchGame))
         .compose(withSteps(pov, initialFen))
         .compose(withNote(note))
         .compose(withBookmark(bookmarked))
@@ -78,11 +81,12 @@ final private[api] class RoundApi(
     for
       initialFen <- initialFenO.fold(gameRepo.initialFen(pov.game))(fuccess)
       given Translate = ctx.translate
-      (json, simul, swiss, note, bookmarked) <-
+      (json, simul, swiss, matchGame, note, bookmarked) <-
         (
           jsonView.watcherJson(pov, users, ctx.pref.some, ctx.me, tv, initialFen, ctxFlags),
           pov.game.simulId.so(simulApi.find),
           swissApi.gameView(pov),
+          pov.game.metadata.matchId.so(matchApi.byId),
           ctx.me.ifTrue(ctx.isMobileApi).so(noteApi.get(pov.gameId, _)),
           bookmarkApi.exists(pov.game, ctx.me)
         ).tupled
@@ -90,6 +94,7 @@ final private[api] class RoundApi(
       withTournament(pov, tour)
         .compose(withSwiss(swiss))
         .compose(withSimul(simul))
+        .compose(withMatch(matchGame))
         .compose(withNote(note))
         .compose(withBookmark(bookmarked))
         .compose(withSteps(pov, initialFen))
@@ -297,5 +302,18 @@ final private[api] class RoundApi(
           "hostId" -> simul.hostId,
           "name" -> simul.name,
           "nbPlaying" -> simul.playingPairings.size
+        )
+    )
+
+  private def withMatch(matchOption: Option[lila.`match`.Match])(json: JsObject) =
+    json.add(
+      "match",
+      matchOption.map: m =>
+        Json.obj(
+          "id" -> m.id,
+          "round" -> m.currentRound,
+          "bestOf" -> m.bestOf,
+          "scores" -> Json.arr(m.scores.white, m.scores.black),
+          "finished" -> m.isFinished
         )
     )
