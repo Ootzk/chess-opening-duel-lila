@@ -34,7 +34,7 @@ final class Env(
   Bus.sub[lila.core.game.FinishGame]:
     case lila.core.game.FinishGame(game, _) =>
       game.metadata.matchId.foreach: matchId =>
-        api.finishGame(matchId, game.id, game.winnerColor)
+        api.finishGame(matchId, game.id, game.winnerUserId)
 
   // When a match game finishes but match continues, create next game and redirect players
   Bus.sub[MatchGameFinished]:

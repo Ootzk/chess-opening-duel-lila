@@ -36,13 +36,18 @@ final class MatchApi(
   def addFirstGame(matchId: MatchId, gameId: GameId): Funit =
     repo.addGame(matchId, gameId)
 
-  def finishGame(matchId: MatchId, gameId: GameId, winnerColor: Option[Color]): Funit =
-    repo.recordResult(matchId, winnerColor).map:
-      case Some(m) if m.isFinished =>
-        Bus.pub(MatchFinished(m))
+  def finishGame(matchId: MatchId, gameId: GameId, winnerId: Option[UserId]): Funit =
+    repo.byId(matchId).flatMap:
+      case None => funit
       case Some(m) =>
-        Bus.pub(MatchGameFinished(m, gameId, winnerColor))
-      case _ => ()
+        // Convert winner userId to match color
+        val winnerMatchColor = winnerId.flatMap(m.colorOf)
+        repo.recordResult(matchId, winnerMatchColor).map:
+          case Some(updated) if updated.isFinished =>
+            Bus.pub(MatchFinished(updated))
+          case Some(updated) =>
+            Bus.pub(MatchGameFinished(updated, gameId, winnerId))
+          case _ => ()
 
   def createNextGame(matchId: MatchId): Fu[Option[Game]] =
     repo.byId(matchId).flatMap:
@@ -91,4 +96,4 @@ final class MatchApi(
 
 // Events
 case class MatchFinished(m: Match)
-case class MatchGameFinished(m: Match, gameId: GameId, winnerColor: Option[Color])
+case class MatchGameFinished(m: Match, gameId: GameId, winnerId: Option[UserId])
