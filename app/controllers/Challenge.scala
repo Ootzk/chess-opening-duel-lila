@@ -57,6 +57,10 @@ final class Challenge(env: Env) extends LilaController(env):
       else if isForMe(c) then Direction.In.some
       else none
     json = env.challenge.jsonView.websiteAndLichobile(c, version, direction)
+    // Challenge가 accepted이고 matchType이 OpeningDuel인 경우 series 조회
+    seriesId <- (c.accepted && c.matchType.contains(ChallengeModel.MatchType.OpeningDuel)).so:
+      (c.challengerUserId, c.destUserId).tupled.so: (challenger, dest) =>
+        env.series.repo.byPlayers(challenger, dest).map(_.map(_.id))
     res <- negotiate(
       html =
         val color = get("color").flatMap(Color.fromName)
@@ -66,14 +70,14 @@ final class Challenge(env: Env) extends LilaController(env):
             .flatMap(env.user.lightUserApi.asyncManyFallback)
             .flatMap: friends =>
               error match
-                case Some(e) => BadRequest.page(views.challenge.mine(c, json, friends, e.some, color))
-                case None => Ok.page(views.challenge.mine(c, json, friends, none, color))
+                case Some(e) => BadRequest.page(views.challenge.mine(c, json, friends, e.some, color, seriesId))
+                case None => Ok.page(views.challenge.mine(c, json, friends, none, color, seriesId))
         else
           Ok.async:
             for
               challenger <- c.challengerUserId.so(env.user.api.byIdWithPerf(_, c.perfType))
               relation <- (ctx.userId, c.challengerUserId).tupled.so(env.relation.api.fetchRelation.tupled)
-            yield views.challenge.theirs(c, json, challenger, color, relation)
+            yield views.challenge.theirs(c, json, challenger, color, relation, seriesId)
       ,
       json = Ok(json)
     ).flatMap(withChallengeAnonCookie(mine && c.challengerIsAnon, c, owner = true))
@@ -90,6 +94,7 @@ final class Challenge(env: Env) extends LilaController(env):
       !challenge.challengerUserId.so(orig => me.exists(_.is(orig)))
 
   import cats.mtl.Handle.*
+  import lila.challenge.Challenge.AcceptResult
   def accept(id: ChallengeId, color: Option[Color]) = Open:
     Found(api.byId(id)): c =>
       isForMe(c).so:
@@ -97,10 +102,16 @@ final class Challenge(env: Env) extends LilaController(env):
           api
             .accept(c, ctx.req.sid, color)
             .flatMap:
-              _.fold("The Challenge has already been accepted".raise): pov =>
+              case None => "The Challenge has already been accepted".raise
+              case Some(AcceptResult.GameStarted(pov)) =>
                 negotiateApi(
                   html = Redirect(routes.Round.watcher(pov.gameId, color | Color.white)),
                   api = _ => env.api.roundApi.player(pov, scalalib.data.Preload.none, none).map { Ok(_) }
+                )
+              case Some(AcceptResult.SeriesPicking(seriesId)) =>
+                negotiateApi(
+                  html = Redirect(routes.Series.pickPage(seriesId)),
+                  api = _ => fuccess(Ok(play.api.libs.json.Json.obj("seriesId" -> seriesId.value)))
                 )
             .flatMap(withChallengeAnonCookie(ctx.isAnon, c, owner = false))
         .rescue: err =>

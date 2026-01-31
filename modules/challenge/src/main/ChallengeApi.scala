@@ -103,6 +103,7 @@ final class ChallengeApi(
       .flatMap:
         case Some(Status.Created) => repo.setSeen(id)
         case Some(Status.Offline) => repo.setSeenAgain(id) >> byId(id).map { _.foreach(uncacheAndNotify) }
+        case Some(Status.Accepted) => funit // 이미 accepted, reload 불필요 (클라이언트가 첫 reload에서 리다이렉트)
         case _ => fuccess(socketReload(id))
 
   def decline(c: Challenge, reason: Challenge.DeclineReason) =
@@ -122,7 +123,7 @@ final class ChallengeApi(
       c: Challenge,
       sid: Option[String],
       requestedColor: Option[Color] = None
-  )(using me: Option[Me]): FuRaise[String, Option[Pov]] =
+  )(using me: Option[Me]): FuRaise[String, Option[AcceptResult]] =
     acceptQueue:
       def withPerf = me.map(_.value).traverse(userApi.withPerf(_, c.perfType))
       if c.canceled
@@ -151,14 +152,19 @@ final class ChallengeApi(
         else
           for
             me <- withPerf
-            pov <- joiner(c, me)
+            result <- joiner(c, me)
             _ <- repo.accept(c)
           yield
             uncacheAndNotify(c)
-            Bus.pub(PositiveEvent.Accept(c, pov.game, me.map(_.id)))
-            c.rematchOf.foreach: gameId =>
-              Bus.pub(lila.game.actorApi.NotifyRematch(gameId, pov.game))
-            pov.some
+            result match
+              case AcceptResult.GameStarted(pov) =>
+                Bus.pub(PositiveEvent.Accept(c, pov.game, me.map(_.id)))
+                c.rematchOf.foreach: gameId =>
+                  Bus.pub(lila.game.actorApi.NotifyRematch(gameId, pov.game))
+              case AcceptResult.SeriesPicking(_) =>
+                // Series 밴픽 시작, 이벤트 없음
+                ()
+            result.some
 
   def offerRematchForGame(game: Game, user: User): Fu[Boolean] =
     challengeMaker.makeRematchOf(game, user).flatMapz { challenge =>

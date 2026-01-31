@@ -15,18 +15,28 @@ final private class ChallengeJoiner(
     seriesApi: lila.series.SeriesApi
 )(using Executor, Scheduler):
 
-  def apply(c: Challenge, destUser: GameUser): FuRaise[String, Pov] = for
+  import Challenge.AcceptResult
+
+  def apply(c: Challenge, destUser: GameUser): FuRaise[String, AcceptResult] = for
     exists <- gameRepo.exists(c.gameId)
     _ <- raiseIf(exists)("The challenge has already been accepted")
     origUser <- c.challengerUserId.so(userApi.byIdWithPerf(_, c.perfType))
     seriesOpt <- createSeriesIfNeeded(c, origUser, destUser)
-    initialFen = seriesOpt.flatMap(_.openingForRound(1)).map(_.fen)
-    game = ChallengeJoiner.createGame(c, origUser, destUser, seriesOpt.map(_.id), initialFen)
-    _ <- gameRepo.insertDenormalized(game, initialFen)
-    _ <- seriesOpt.map(_.id).so(sid => seriesApi.addFirstGame(sid, game.id))
-    _ <- onStartOrRetry(game.id).recover: _ =>
-      logger.error(s"onStart failed for game ${game.id}")
-  yield Pov(game, !c.finalColor)
+    result <- seriesOpt match
+      // Series가 Picking phase면 게임 생성 스킵, 밴픽 페이지로 이동
+      case Some(s) if s.phase == lila.series.Series.Phase.Picking =>
+        fuccess(AcceptResult.SeriesPicking(s.id))
+      // 그 외의 경우 게임 생성
+      case _ =>
+        val initialFen = seriesOpt.flatMap(_.openingForRound(1)).map(_.fen)
+        val game = ChallengeJoiner.createGame(c, origUser, destUser, seriesOpt.map(_.id), initialFen)
+        for
+          _ <- gameRepo.insertDenormalized(game, initialFen)
+          _ <- seriesOpt.map(_.id).so(sid => seriesApi.addFirstGame(sid, game.id))
+          _ <- onStartOrRetry(game.id).recover: _ =>
+            logger.error(s"onStart failed for game ${game.id}")
+        yield AcceptResult.GameStarted(Pov(game, !c.finalColor))
+  yield result
 
   private def createSeriesIfNeeded(
       c: Challenge,

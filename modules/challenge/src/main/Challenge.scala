@@ -159,6 +159,11 @@ object Challenge:
     val byKey = values.mapBy(_.toString.toLowerCase)
     def apply(key: String): Option[MatchType] = byKey.get(key.toLowerCase)
 
+  // Challenge accept 결과: 게임 시작 또는 시리즈 밴픽 페이지로 이동
+  enum AcceptResult:
+    case GameStarted(pov: Pov)
+    case SeriesPicking(seriesId: lila.core.id.SeriesId)
+
   private def speedOf(timeControl: TimeControl) = timeControl match
     case TimeControl.Clock(config) => Speed(config)
     case _ => Speed.Correspondence

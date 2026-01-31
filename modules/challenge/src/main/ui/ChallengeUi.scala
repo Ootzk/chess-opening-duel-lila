@@ -8,6 +8,7 @@ import lila.core.LightUser
 import lila.core.game.GameRule
 import lila.core.user.WithPerf
 import lila.core.relation.Relation
+import lila.core.id.SeriesId
 import lila.ui.*
 
 import ScalatagsTemplate.{ *, given }
@@ -104,7 +105,8 @@ final class ChallengeUi(helpers: Helpers):
       json: JsObject,
       friends: Seq[LightUser],
       error: Option[String],
-      color: Option[Color]
+      color: Option[Color],
+      seriesId: Option[SeriesId] = None
   )(using ctx: Context) =
 
     val cancelForm =
@@ -204,15 +206,21 @@ final class ChallengeUi(helpers: Helpers):
               a(cls := "button button-fat", href := routes.Lobby.home)(trans.site.newOpponent())
             )
           case Status.Accepted =>
+            val redirectUrl = seriesId match
+              case Some(sid) => routes.Series.pickPage(sid).url
+              case None => routes.Round.watcher(c.gameId, Color.white).url
             div(cls := "follow-up")(
-              h1(cls := "box__top")(trans.challenge.challengeAccepted()),
+              h1(cls := "box__top")(
+                if seriesId.isDefined then "Opening Duel Starting!" else trans.challenge.challengeAccepted()
+              ),
               details(c, color),
               a(
                 id := "challenge-redirect",
-                href := routes.Round.watcher(c.gameId, Color.white),
+                href := redirectUrl,
                 cls := "button button-fat"
-              ):
-                trans.site.joinTheGame()
+              )(
+                if seriesId.isDefined then "Go to Ban/Pick Phase" else trans.site.joinTheGame()
+              )
             )
           case Status.Canceled =>
             div(cls := "follow-up")(
@@ -227,7 +235,8 @@ final class ChallengeUi(helpers: Helpers):
       json: JsObject,
       user: Option[WithPerf],
       color: Option[Color],
-      relation: Option[Relation]
+      relation: Option[Relation],
+      seriesId: Option[SeriesId] = None
   )(using ctx: Context) =
     page(c, json, owner = false, color):
       main(cls := "page-small challenge-page challenge-theirs box box-pad"):
@@ -288,15 +297,20 @@ final class ChallengeUi(helpers: Helpers):
               a(cls := "button button-fat", href := routes.Lobby.home)(trans.site.newOpponent())
             )
           case Status.Accepted =>
+            val redirectUrl = seriesId match
+              case Some(sid) => routes.Series.pickPage(sid).url
+              case None => routes.Round.watcher(c.gameId, Color.white).url
             div(cls := "follow-up")(
-              h1(cls := "box__top")(trans.challenge.challengeAccepted()),
+              h1(cls := "box__top")(
+                if seriesId.isDefined then "Opening Duel Starting!" else trans.challenge.challengeAccepted()
+              ),
               details(c, color),
               a(
                 id := "challenge-redirect",
-                href := routes.Round.watcher(c.gameId, Color.white),
+                href := redirectUrl,
                 cls := "button button-fat"
               )(
-                trans.site.joinTheGame()
+                if seriesId.isDefined then "Go to Ban/Pick Phase" else trans.site.joinTheGame()
               )
             )
           case Status.Canceled =>
