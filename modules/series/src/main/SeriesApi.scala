@@ -97,7 +97,7 @@ final class SeriesApi(
               val updated = s.cancelConfirmPicks(color)
               repo.update(updated).inject(Some(updated))
 
-  // 밴 확정 (플레이어별로 confirm, 양측 완료 시 페이즈 전환)
+  // 밴 확정 (플레이어별로 confirm, 양측 완료 시 게임 생성 및 페이즈 전환)
   def confirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
@@ -110,11 +110,23 @@ final class SeriesApi(
             else if s.confirmedBans(color) then fuccess(Some(s)) // 이미 확정됨
             else
               val confirmed = s.confirmBans(color)
-              // 양측 모두 확정되면 Game1Shuffling phase로 전환
-              val updated =
-                if confirmed.bothBansConfirmed then confirmed.setPhase(Series.Phase.Game1Shuffling)
-                else confirmed
-              repo.update(updated).inject(Some(updated))
+              // 양측 모두 확정되면 오프닝 선택, 게임 생성, Game1Shuffling phase로 전환
+              if confirmed.bothBansConfirmed then
+                val bannedOpenings = confirmed.bannedOpenings
+                val selectedOpening = scala.util.Random.shuffle(bannedOpenings).head
+                val withOpening = confirmed.addOpening(selectedOpening)
+                val colorMapping = withOpening.colorForRound(withOpening.currentRound)
+                for
+                  whiteUser <- userApi.byIdWithPerf(colorMapping.white, withOpening.perfType)
+                  blackUser <- userApi.byIdWithPerf(colorMapping.black, withOpening.perfType)
+                  game <- makeGame(withOpening, whiteUser, blackUser)
+                  _ <- gameRepo.insertDenormalized(game, Some(selectedOpening.fen))
+                  updated = withOpening.addGame(game.id).setPhase(Series.Phase.Game1Shuffling)
+                  _ <- repo.update(updated)
+                  _ <- onStart.exec(game.id)
+                yield Some(updated)
+              else
+                repo.update(confirmed).inject(Some(confirmed))
 
   // 밴 확정 취소
   def cancelConfirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
@@ -177,11 +189,27 @@ final class SeriesApi(
             Bus.pub(SeriesGameFinished(updated, gameId, winnerId))
           case _ => ()
 
+  // 현재 라운드의 게임 조회 (이미 존재하면 반환)
+  def getGameForCurrentRound(seriesId: SeriesId): Fu[Option[Game]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        // 현재 라운드에 해당하는 게임이 있는지 확인
+        if s.gameIds.length >= s.currentRound then
+          val gameId = s.gameIds(s.currentRound - 1)
+          gameRepo.game(gameId)
+        else
+          fuccess(None)
+
   def createNextGame(seriesId: SeriesId): Fu[Option[Game]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
         if s.isFinished || s.currentRound > Series.bestOf then fuccess(None)
+        // 이미 현재 라운드에 게임이 있으면 그 게임 반환 (race condition 방지)
+        else if s.gameIds.length >= s.currentRound then
+          val gameId = s.gameIds(s.currentRound - 1)
+          gameRepo.game(gameId)
         else
           val colorMapping = s.colorForRound(s.currentRound)
           val initialFen = s.openingForRound(s.currentRound).map(_.fen)

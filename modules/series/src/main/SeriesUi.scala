@@ -77,3 +77,58 @@ final class SeriesUi(helpers: Helpers):
         "i18n" -> Json.obj()
       )
     ).some
+
+  def shuffling(s: Series, seriesJson: JsObject)(using Context): Page =
+    val selectedOpening = s.openings.headOption
+    Page("Opening Duel - Game 1 Starting")
+      .css("series.pick")
+      .js(shufflingModule(s, seriesJson))
+      .csp(_.withWebAssembly)
+      .flag(_.zoom)
+      .body(
+        main(cls := "series-pick shuffling")(
+          div(cls := "series-pick__header")(
+            h1("Game 1 Starting..."),
+            div(cls := "series-pick__countdown")("3")
+          ),
+          div(cls := "series-pick__shuffling-boxes")(
+            renderBanBox(s, chess.Color.White, selectedOpening),
+            renderBanBox(s, chess.Color.Black, selectedOpening)
+          )
+        )
+      )
+
+  private def renderBanBox(s: Series, color: chess.Color, selectedOpening: Option[OpeningPreset]) =
+    val bans = s.bans(color)
+    val playerName = color.fold("White", "Black")
+    div(cls := "series-pick__ban-box")(
+      div(cls := "series-pick__ban-header")(s"$playerName's Bans"),
+      div(cls := "series-pick__ban-openings")(
+        bans.map: opening =>
+          val isHighlighted = selectedOpening.exists(_.name == opening.name)
+          val boardFen = opening.fen.value.split(" ").headOption.getOrElse("")
+          val openingCls = if isHighlighted then "series-pick__opening highlighted" else "series-pick__opening"
+          div(
+            cls := openingCls,
+            attr("data-name") := opening.name,
+            attr("data-fen") := opening.fen.value
+          )(
+            div(cls := "series-pick__board mini-board mini-board--init cg-wrap is2d",
+                attr("data-state") := s"$boardFen,white,"
+            )(cgWrapContent),
+            div(cls := "series-pick__name")(
+              span(cls := "opening-name")(opening.name)
+            )
+          )
+      )
+    )
+
+  private def shufflingModule(s: Series, seriesJson: JsObject)(using ctx: Context) =
+    PageModule(
+      "series.shuffling",
+      Json.obj(
+        "seriesId" -> s.id.value,
+        "phase" -> s.phase.id,
+        "series" -> seriesJson
+      )
+    ).some

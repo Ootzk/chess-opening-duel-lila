@@ -37,6 +37,7 @@ export interface SeriesData {
     black: OpeningPreset[];
   };
   bannedOpenings: OpeningPreset[];
+  openings: OpeningPreset[];
   confirmedPicks: {
     white: boolean;
     black: boolean;

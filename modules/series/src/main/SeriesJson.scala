@@ -49,6 +49,7 @@ final class SeriesJson(
             "black" -> s.remainingPicks(chess.Color.Black).map(openingJson)
           ),
           "bannedOpenings" -> s.bannedOpenings.map(openingJson),
+          "openings" -> s.openings.map(openingJson),
           "confirmedPicks" -> Json.obj(
             "white" -> s.confirmedPicks.white,
             "black" -> s.confirmedPicks.black
@@ -60,6 +61,7 @@ final class SeriesJson(
           "finished" -> s.isFinished,
           "winner" -> s.winner.map(_.name)
         ).add("povColor" -> povColor.map(_.name))
+         .add("currentGame" -> s.currentGame.map(_.value))
 
   def roundInfo(s: Series): JsObject =
     Json.obj(

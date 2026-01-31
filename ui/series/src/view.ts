@@ -4,11 +4,61 @@ import type SeriesPickCtrl from './ctrl';
 import type { OpeningPreset } from './interfaces';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
+  if (ctrl.isShuffling) {
+    return renderShuffling(ctrl);
+  }
   return h('div.series-pick', [
     renderHeader(ctrl),
     renderGrid(ctrl),
     renderFooter(ctrl),
   ]);
+}
+
+function renderShuffling(ctrl: SeriesPickCtrl): VNode {
+  const whiteBans = ctrl.series.bans.white;
+  const blackBans = ctrl.series.bans.black;
+  const whiteName = ctrl.series.players.white.user?.name || 'White';
+  const blackName = ctrl.series.players.black.user?.name || 'Black';
+
+  return h('div.series-pick.shuffling', [
+    h('div.series-pick__header', [
+      h('h1', 'Game 1 Starting...'),
+      h('div.series-pick__countdown', String(ctrl.shufflingCountdown)),
+    ]),
+    h('div.series-pick__shuffling-boxes', [
+      renderBanBox(ctrl, whiteName, whiteBans),
+      renderBanBox(ctrl, blackName, blackBans),
+    ]),
+  ]);
+}
+
+function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: OpeningPreset[]): VNode {
+  return h('div.series-pick__ban-box', [
+    h('div.series-pick__ban-header', `${playerName}'s Bans`),
+    h('div.series-pick__ban-openings', bans.map(opening => renderShufflingOpening(ctrl, opening))),
+  ]);
+}
+
+function renderShufflingOpening(ctrl: SeriesPickCtrl, opening: OpeningPreset): VNode {
+  const isHighlighted = ctrl.selectedOpening?.name === opening.name;
+
+  return h(
+    'div.series-pick__opening',
+    {
+      class: { highlighted: isHighlighted },
+      attrs: { 'data-name': opening.name, 'data-fen': opening.fen },
+    },
+    [
+      h(
+        'div.series-pick__board.mini-board.mini-board--init.cg-wrap.is2d',
+        {
+          attrs: { 'data-state': `${opening.fen},white,` },
+        },
+        [h('cg-container', [h('cg-board')])],
+      ),
+      h('div.series-pick__name', [h('span.opening-name', opening.name)]),
+    ],
+  );
 }
 
 function renderHeader(ctrl: SeriesPickCtrl): VNode {

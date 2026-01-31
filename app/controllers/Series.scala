@@ -20,10 +20,25 @@ final class Series(env: Env) extends LilaController(env):
   def pickPage(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>
       if !s.players.contains(me.userId) then Forbidden("Not a player of this series")
+      else if s.phase == lila.series.Series.Phase.Game1Shuffling then
+        Redirect(routes.Series.shufflingPage(id))
       else
         for
           json <- env.series.jsonView(s, Some(me.userId))
           page <- Ok.page(views.series.pick(s, json, OpeningPresets.all))
+        yield page
+  }
+
+  // Game1 셔플링 페이지 (HTML)
+  def shufflingPage(id: SeriesId) = Auth { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !s.players.contains(me.userId) then Forbidden("Not a player of this series")
+      else if s.phase != lila.series.Series.Phase.Game1Shuffling then
+        Redirect(routes.Series.pickPage(id))
+      else
+        for
+          json <- env.series.jsonView(s, Some(me.userId))
+          page <- Ok.page(views.series.shuffling(s, json))
         yield page
   }
 

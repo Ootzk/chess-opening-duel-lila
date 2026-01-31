@@ -13,6 +13,11 @@ export default class SeriesPickCtrl {
   myConfirmed: boolean = false;
   opponentConfirmed: boolean = false;
 
+  // Game1Shuffling phase state
+  selectedOpening: OpeningPreset | null = null;
+  shufflingCountdown: number = 3;
+  gameId: string | null = null;
+
   constructor(
     readonly config: PickConfig,
     readonly redraw: () => void,
@@ -25,8 +30,13 @@ export default class SeriesPickCtrl {
     // Initialize selections and confirmed state from series data
     this.initFromSeries();
 
-    // Start timer
-    this.startTimer();
+    // Handle different phases
+    if (this.isShuffling) {
+      this.startShuffling();
+    } else {
+      // Start timer for pick/ban phases
+      this.startTimer();
+    }
   }
 
   private initFromSeries(): void {
@@ -84,6 +94,10 @@ export default class SeriesPickCtrl {
 
   get isSelecting(): boolean {
     return this.phase === PhaseId.Selecting;
+  }
+
+  get isShuffling(): boolean {
+    return this.phase === PhaseId.Game1Shuffling;
   }
 
   get isWaiting(): boolean {
@@ -221,9 +235,20 @@ export default class SeriesPickCtrl {
         this.myConfirmed = data.myConfirmed ?? true;
         this.opponentConfirmed = data.opponentConfirmed ?? false;
 
-        // Phase changed, reload page
-        if (data.phase !== this.phase) {
-          window.location.reload();
+        const newPhase = Number(data.phase);
+        console.log('[series] confirm response:', { newPhase, currentPhase: this.phase, Game1Shuffling: PhaseId.Game1Shuffling });
+
+        // Phase changed, redirect to appropriate page
+        if (newPhase !== this.phase) {
+          if (newPhase === PhaseId.Game1Shuffling) {
+            console.log('[series] Redirecting to shuffling page');
+            window.location.href = `/series/${this.seriesId}/shuffling`;
+            return;
+          } else {
+            console.log('[series] Reloading page for phase:', newPhase);
+            window.location.reload();
+            return;
+          }
         } else if (this.isWaiting) {
           // Start polling while waiting for opponent
           this.startPolling();
@@ -255,10 +280,20 @@ export default class SeriesPickCtrl {
       const response = await fetch(`/api/series/${this.seriesId}`);
       if (response.ok) {
         const data = await response.json();
-        // Phase changed, reload page
-        if (data.phase !== this.phase) {
+        const newPhase = Number(data.phase);
+        // Phase changed, redirect to appropriate page
+        if (newPhase !== this.phase) {
+          console.log('[series] poll detected phase change:', { newPhase, currentPhase: this.phase, Game1Shuffling: PhaseId.Game1Shuffling });
           this.stopPolling();
-          window.location.reload();
+          if (newPhase === PhaseId.Game1Shuffling) {
+            console.log('[series] Poll: Redirecting to shuffling page');
+            window.location.href = `/series/${this.seriesId}/shuffling`;
+            return;
+          } else {
+            console.log('[series] Poll: Reloading page for phase:', newPhase);
+            window.location.reload();
+            return;
+          }
         }
       }
     } catch (e) {
@@ -331,5 +366,46 @@ export default class SeriesPickCtrl {
       clearInterval(this.timerInterval);
     }
     this.stopPolling();
+  }
+
+  // Game1Shuffling phase methods
+  private startShuffling(): void {
+    // series.openings[0]에서 selectedOpening 가져옴 (백엔드에서 이미 선택됨)
+    const openings = this.series.openings;
+    if (openings && openings.length > 0) {
+      this.selectedOpening = openings[0];
+    }
+    this.startShufflingCountdown();
+    this.redraw();
+  }
+
+  private startShufflingCountdown(): void {
+    this.timerInterval = window.setInterval(() => {
+      if (this.shufflingCountdown > 0) {
+        this.shufflingCountdown--;
+        this.redraw();
+      } else {
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+        }
+        this.startGame();
+      }
+    }, 1000);
+  }
+
+  private async startGame(): Promise<void> {
+    try {
+      const response = await fetch(`/series/${this.seriesId}/nextGame`, {
+        method: 'POST',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.redirect) {
+          window.location.href = data.redirect;
+        }
+      }
+    } catch (e) {
+      console.error('Error starting game:', e);
+    }
   }
 }
