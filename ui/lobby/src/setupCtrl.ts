@@ -48,6 +48,7 @@ export default class SetupController {
     this.store = {
       hook: this.makeSetupStore('hook'),
       friend: this.makeSetupStore('friend'),
+      openingDuel: this.makeSetupStore('openingDuel'),
       ai: this.makeSetupStore('ai'),
     };
   }

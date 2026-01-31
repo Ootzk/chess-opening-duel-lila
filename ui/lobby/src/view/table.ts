@@ -30,6 +30,16 @@ export default function table(ctrl: LobbyController) {
         that someone nearby can scan.`,
     },
     {
+      gameType: 'openingDuel',
+      label: 'Opening Duel',
+      disabled: hasOngoingRealTimeGame,
+      title: $trim`
+        Create a custom game and choose your opponent - but best of 5 match.
+
+        You will receive a challenge link to share via email or text, as well as a QR code
+        that someone nearby can scan.`,
+    },
+    {
       gameType: 'ai',
       label: i18n.site.playAgainstComputer,
       disabled: hasOngoingRealTimeGame,

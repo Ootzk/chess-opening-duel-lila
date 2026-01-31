@@ -15,6 +15,7 @@ export default function setupModal(ctrl: LobbyController): VNode[] | null {
   const buttonText = {
     hook: i18n.site.createLobbyGame,
     friend: setupCtrl.friendUser ? i18n.site.challengeX(setupCtrl.friendUser) : i18n.site.challengeAFriend,
+    openingDuel: setupCtrl.friendUser ? `Challenge ${setupCtrl.friendUser} - Opening Duel` : 'Opening Duel',
     ai: i18n.site.playAgainstComputer,
   }[setupCtrl.gameType];
   const disabled = !setupCtrl.valid() || setupCtrl.loading;
@@ -67,6 +68,11 @@ const views = {
     fenInput(ctrl.setupCtrl),
     timePickerAndSliders(ctrl.setupCtrl.timeControl, 0),
     gameModeButtons(ctrl),
+    colorButtons(ctrl),
+  ],
+  openingDuel: (ctrl: LobbyController): LooseVNodes => [
+    fenInput(ctrl.setupCtrl),
+    timePickerAndSliders(ctrl.setupCtrl.timeControl, 0),
     colorButtons(ctrl),
   ],
   ai: (ctrl: LobbyController): LooseVNodes => [
