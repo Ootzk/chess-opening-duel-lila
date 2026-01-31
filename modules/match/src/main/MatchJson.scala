@@ -2,6 +2,7 @@ package lila.`match`
 
 import play.api.libs.json.*
 
+import lila.common.Json.given
 import lila.core.LightUser
 import lila.core.userId.UserId
 

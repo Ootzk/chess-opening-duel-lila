@@ -44,7 +44,7 @@ object BsonHandlers:
         "g" -> o.gameIds,
         "r" -> o.currentRound,
         "s" -> o.status,
-        "w" -> o.winner.map(_.isWhite),
+        "w" -> o.winner.map(_.white),
         "v" -> o.variant,
         "c" -> o.clock,
         "f" -> o.initialFen,

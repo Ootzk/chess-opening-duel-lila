@@ -6,6 +6,7 @@ import chess.{ ByColor, Color }
 
 import lila.common.Bus
 import lila.core.id.{ GameId, MatchId }
+import lila.core.user.GameUser
 import lila.core.userId.UserId
 
 final class MatchApi(
@@ -17,7 +18,7 @@ final class MatchApi(
     cacheApi: lila.memo.CacheApi
 )(using Executor, lila.core.game.IdGenerator):
 
-  import lila.core.game.{ Game, Player }
+  import lila.core.game.Game
 
   def create(
       players: ByColor[UserId],
@@ -41,40 +42,43 @@ final class MatchApi(
       case _ => ()
 
   def createNextGame(matchId: MatchId): Fu[Option[GameId]] =
-    repo.byId(matchId).flatMapz: m =>
-      if m.isFinished || m.currentRound > Match.bestOf then fuccess(None)
-      else
-        for
-          whiteUser <- userApi.withPerf(m.colorForRound(m.currentRound).white, m.perfType)
-          blackUser <- userApi.withPerf(m.colorForRound(m.currentRound).black, m.perfType)
-          game <- makeGame(m, whiteUser, blackUser)
-          _ <- gameRepo.insertDenormalized(game)
-          _ <- repo.addGame(m.id, game.id)
-          _ <- onStart.exec(game.id)
-        yield Some(game.id)
+    repo.byId(matchId).flatMap:
+      case None => fuccess(None)
+      case Some(m) =>
+        if m.isFinished || m.currentRound > Match.bestOf then fuccess(None)
+        else
+          val colorMapping = m.colorForRound(m.currentRound)
+          for
+            whiteUser <- userApi.byIdWithPerf(colorMapping.white, m.perfType)
+            blackUser <- userApi.byIdWithPerf(colorMapping.black, m.perfType)
+            game <- makeGame(m, whiteUser, blackUser)
+            _ <- gameRepo.insertDenormalized(game)
+            _ <- repo.addGame(m.id, game.id)
+            _ <- onStart.exec(game.id)
+          yield Some(game.id)
 
   private def makeGame(
       m: Match,
-      whiteUser: Option[lila.core.user.UserWithPerfs],
-      blackUser: Option[lila.core.user.UserWithPerfs]
+      whiteUser: GameUser,
+      blackUser: GameUser
   )(using idGenerator: lila.core.game.IdGenerator): Fu[Game] =
     idGenerator.game.dmap: id =>
-      val start = chess.Game(
-        variantOption = Some(m.variant),
-        fen = m.initialFen
+      val chessGame = chess.Game(
+        position = m.variant.initialPosition,
+        clock = chess.Clock(m.clock).some
       )
-      Game
-        .make(
-          id = id,
-          chess = start.copy(clock = chess.Clock(m.clock).some),
+      lila.core.game
+        .newGame(
+          chess = chessGame,
           players = ByColor: color =>
-            val user = color.fold(whiteUser, blackUser)
-            newPlayer(color, user, m.perfType)
+            lila.game.Player.make(color, if color.white then whiteUser else blackUser)
           ,
-          mode = chess.Rated.No,
+          rated = chess.Rated.No,
           source = lila.core.game.Source.Friend,
+          daysPerTurn = None,
           pgnImport = None
         )
+        .withId(id)
         .copy(
           metadata = lila.core.game.newMetadata(lila.core.game.Source.Friend).copy(
             matchId = m.id.some

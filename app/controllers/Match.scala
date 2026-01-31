@@ -1,5 +1,6 @@
 package controllers
 
+import chess.Color
 import play.api.libs.json.Json
 import play.api.mvc.Result
 
@@ -13,10 +14,7 @@ final class Match(env: Env) extends LilaController(env):
     Found(api.byId(id)): m =>
       for
         json <- env.`match`.jsonView(m, ctx.me.map(_.userId))
-      yield negotiate(
-        html = Ok.page(views.html.base.embed(s"Match ${m.id}", views.html.base.topnav())),
-        json = JsonOk(json)
-      )
+      yield JsonOk(json)
 
   def apiShow(id: MatchId) = AnonOrScoped() { ctx ?=>
     Found(api.byId(id)): m =>
@@ -31,6 +29,6 @@ final class Match(env: Env) extends LilaController(env):
       else if !m.players.contains(me.userId) then Forbidden("Not a player of this match")
       else
         api.createNextGame(id).map:
-          case Some(gameId) => Redirect(routes.Round.watcher(gameId, "white"))
+          case Some(gameId) => Redirect(routes.Round.watcher(gameId, Color.white))
           case None         => Redirect(routes.Match.show(id))
   }

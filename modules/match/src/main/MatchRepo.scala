@@ -27,9 +27,11 @@ final class MatchRepo(val coll: Coll)(using Executor):
       .void
 
   def recordResult(matchId: MatchId, winnerColor: Option[chess.Color]): Fu[Option[Match]] =
-    byId(matchId).flatMapz: m =>
-      val updated = m.recordResult(winnerColor)
-      update(updated).inject(Some(updated))
+    byId(matchId).flatMap:
+      case None => fuccess(None)
+      case Some(m) =>
+        val updated = m.recordResult(winnerColor)
+        update(updated).inject(Some(updated))
 
   def byGameId(gameId: GameId): Fu[Option[Match]] =
     coll.one[Match]($doc("g" -> gameId))
