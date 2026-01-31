@@ -4,6 +4,7 @@ import reactivemongo.api.bson.*
 
 import lila.db.dsl.{ *, given }
 import lila.core.id.{ GameId, SeriesId }
+import lila.core.userId.UserId
 
 final class SeriesRepo(val coll: Coll)(using Executor):
 
@@ -35,3 +36,11 @@ final class SeriesRepo(val coll: Coll)(using Executor):
 
   def byGameId(gameId: GameId): Fu[Option[Series]] =
     coll.one[Series]($doc("g" -> gameId))
+
+  // 두 플레이어로 가장 최근 생성된 series 찾기 (밴픽 리다이렉트용)
+  // "p"는 [whiteUserId, blackUserId] 배열
+  def byPlayers(user1: UserId, user2: UserId): Fu[Option[Series]] =
+    coll
+      .find($doc("p".$all(List(user1, user2))))
+      .sort($doc("ca" -> -1)) // createdAt 내림차순
+      .one[Series]

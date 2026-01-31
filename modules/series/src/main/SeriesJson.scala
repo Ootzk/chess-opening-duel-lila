@@ -15,6 +15,15 @@ final class SeriesJson(
       .asyncMany(List(s.players.white, s.players.black))
       .map: users =>
         val (white, black) = (users.headOption.flatten, users.lastOption.flatten)
+        val povColor = povUserId.flatMap(s.colorOf)
+        // Pick Phase에서는 상대 픽을 숨김 (동시 비밀 공개 방식)
+        val visiblePicks = if s.phase == Series.Phase.Picking then
+          povColor match
+            case Some(chess.Color.White) => chess.ByColor(s.picks.white, Nil)
+            case Some(chess.Color.Black) => chess.ByColor(Nil, s.picks.black)
+            case None => chess.ByColor.fill(Nil) // 관전자는 양쪽 다 안 보임
+        else
+          s.picks
         Json.obj(
           "id" -> s.id,
           "bestOf" -> s.bestOf,
@@ -28,8 +37,8 @@ final class SeriesJson(
           ),
           "scores" -> Json.arr(s.scores.white, s.scores.black),
           "picks" -> Json.obj(
-            "white" -> s.picks.white.map(openingJson),
-            "black" -> s.picks.black.map(openingJson)
+            "white" -> visiblePicks.white.map(openingJson),
+            "black" -> visiblePicks.black.map(openingJson)
           ),
           "bans" -> Json.obj(
             "white" -> s.bans.white.map(openingJson),
@@ -40,9 +49,17 @@ final class SeriesJson(
             "black" -> s.remainingPicks(chess.Color.Black).map(openingJson)
           ),
           "bannedOpenings" -> s.bannedOpenings.map(openingJson),
+          "confirmedPicks" -> Json.obj(
+            "white" -> s.confirmedPicks.white,
+            "black" -> s.confirmedPicks.black
+          ),
+          "confirmedBans" -> Json.obj(
+            "white" -> s.confirmedBans.white,
+            "black" -> s.confirmedBans.black
+          ),
           "finished" -> s.isFinished,
           "winner" -> s.winner.map(_.name)
-        ).add("povColor" -> povUserId.flatMap(s.colorOf).map(_.name))
+        ).add("povColor" -> povColor.map(_.name))
 
   def roundInfo(s: Series): JsObject =
     Json.obj(

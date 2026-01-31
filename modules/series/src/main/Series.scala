@@ -18,9 +18,11 @@ case class Series(
     results: List[Option[Color]], // 각 게임 승자 색상 (None=무승부)
     currentRound: Int,
     status: Series.Status,
-    phase: Series.Phase,                 // 밴픽 단계
-    picks: ByColor[List[OpeningPreset]], // 각 플레이어가 픽한 오프닝 (최대 5개)
-    bans: ByColor[List[OpeningPreset]],  // 각 플레이어가 밴한 상대 오프닝 (최대 2개)
+    phase: Series.Phase,                   // 밴픽 단계
+    picks: ByColor[List[OpeningPreset]],   // 각 플레이어가 픽한 오프닝 (최대 5개)
+    bans: ByColor[List[OpeningPreset]],    // 각 플레이어가 밴한 상대 오프닝 (최대 2개)
+    confirmedPicks: ByColor[Boolean],      // 픽 확정 여부
+    confirmedBans: ByColor[Boolean],       // 밴 확정 여부
     winner: Option[Color],
     variant: chess.variant.Variant,
     clock: ClockConfig,
@@ -111,6 +113,28 @@ case class Series(
   def setPhase(newPhase: Series.Phase): Series =
     copy(phase = newPhase)
 
+  // 픽 확정
+  def confirmPicks(color: Color): Series =
+    copy(confirmedPicks = confirmedPicks.update(color, _ => true))
+
+  // 픽 확정 취소
+  def cancelConfirmPicks(color: Color): Series =
+    copy(confirmedPicks = confirmedPicks.update(color, _ => false))
+
+  // 밴 확정
+  def confirmBans(color: Color): Series =
+    copy(confirmedBans = confirmedBans.update(color, _ => true))
+
+  // 밴 확정 취소
+  def cancelConfirmBans(color: Color): Series =
+    copy(confirmedBans = confirmedBans.update(color, _ => false))
+
+  // 양측 픽 확정 여부
+  def bothPicksConfirmed: Boolean = confirmedPicks.white && confirmedPicks.black
+
+  // 양측 밴 확정 여부
+  def bothBansConfirmed: Boolean = confirmedBans.white && confirmedBans.black
+
   // 오프닝 추가 (게임 시작 시)
   def addOpening(opening: OpeningPreset): Series =
     copy(openings = openings :+ opening)
@@ -157,6 +181,8 @@ object Series:
     phase = Phase.Picking,
     picks = ByColor.fill(Nil),
     bans = ByColor.fill(Nil),
+    confirmedPicks = ByColor.fill(false),
+    confirmedBans = ByColor.fill(false),
     winner = None,
     variant = variant,
     clock = clock,

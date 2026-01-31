@@ -59,6 +59,8 @@ object BsonHandlers:
       val resultsList = r.getO[List[BSONValue]]("rs").getOrElse(Nil)
       val picksList = r.getO[List[List[OpeningPreset]]]("pk").getOrElse(List(Nil, Nil))
       val bansList = r.getO[List[List[OpeningPreset]]]("bn").getOrElse(List(Nil, Nil))
+      val confirmedPicksList = r.getO[List[Boolean]]("cpk").getOrElse(List(false, false))
+      val confirmedBansList = r.getO[List[Boolean]]("cbn").getOrElse(List(false, false))
       Series(
         id = r.get[SeriesId]("_id"),
         players = ByColor(playersList.head, playersList.last),
@@ -70,6 +72,8 @@ object BsonHandlers:
         phase = r.getO[Series.Phase]("ph").getOrElse(Series.Phase.Picking),
         picks = ByColor(picksList.headOption.getOrElse(Nil), picksList.lastOption.getOrElse(Nil)),
         bans = ByColor(bansList.headOption.getOrElse(Nil), bansList.lastOption.getOrElse(Nil)),
+        confirmedPicks = ByColor(confirmedPicksList.headOption.getOrElse(false), confirmedPicksList.lastOption.getOrElse(false)),
+        confirmedBans = ByColor(confirmedBansList.headOption.getOrElse(false), confirmedBansList.lastOption.getOrElse(false)),
         winner = r.getO[Boolean]("w").map(Color.fromWhite),
         variant = r.get[chess.variant.Variant]("v"),
         clock = r.get[chess.Clock.Config]("c"),
@@ -89,6 +93,8 @@ object BsonHandlers:
         "ph" -> o.phase,
         "pk" -> List(o.picks.white, o.picks.black),
         "bn" -> List(o.bans.white, o.bans.black),
+        "cpk" -> List(o.confirmedPicks.white, o.confirmedPicks.black),
+        "cbn" -> List(o.confirmedBans.white, o.confirmedBans.black),
         "w" -> o.winner.map(_.white),
         "v" -> o.variant,
         "c" -> o.clock,
