@@ -64,27 +64,71 @@ final class SeriesApi(
               val updated = s.setBans(color, validBans)
               repo.update(updated).inject(Some(updated))
 
-  // 픽 확정 및 페이즈 전환 (양측 픽 완료 시)
-  def confirmPicks(seriesId: SeriesId): Fu[Option[Series]] =
+  // 픽 확정 (플레이어별로 confirm, 양측 완료 시 페이즈 전환)
+  def confirmPicks(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        if s.phase != Series.Phase.Picking then fuccess(None)
-        else if s.picks.white.isEmpty || s.picks.black.isEmpty then fuccess(None)
-        else
-          val updated = s.setPhase(Series.Phase.Banning)
-          repo.update(updated).inject(Some(updated))
+        s.colorOf(userId) match
+          case None => fuccess(None)
+          case Some(color) =>
+            if s.phase != Series.Phase.Picking then fuccess(None)
+            else if s.picks(color).isEmpty then fuccess(None)
+            else if s.confirmedPicks(color) then fuccess(Some(s)) // 이미 확정됨
+            else
+              val confirmed = s.confirmPicks(color)
+              // 양측 모두 확정되면 Banning phase로 전환
+              val updated =
+                if confirmed.bothPicksConfirmed then confirmed.setPhase(Series.Phase.Banning)
+                else confirmed
+              repo.update(updated).inject(Some(updated))
 
-  // 밴 확정 및 페이즈 전환 (양측 밴 완료 시)
-  def confirmBans(seriesId: SeriesId): Fu[Option[Series]] =
+  // 픽 확정 취소
+  def cancelConfirmPicks(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        if s.phase != Series.Phase.Banning then fuccess(None)
-        else if s.bans.white.isEmpty || s.bans.black.isEmpty then fuccess(None)
-        else
-          val updated = s.setPhase(Series.Phase.Game1Shuffling)
-          repo.update(updated).inject(Some(updated))
+        s.colorOf(userId) match
+          case None => fuccess(None)
+          case Some(color) =>
+            if s.phase != Series.Phase.Picking then fuccess(None)
+            else if !s.confirmedPicks(color) then fuccess(Some(s)) // 이미 취소됨
+            else
+              val updated = s.cancelConfirmPicks(color)
+              repo.update(updated).inject(Some(updated))
+
+  // 밴 확정 (플레이어별로 confirm, 양측 완료 시 페이즈 전환)
+  def confirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.colorOf(userId) match
+          case None => fuccess(None)
+          case Some(color) =>
+            if s.phase != Series.Phase.Banning then fuccess(None)
+            else if s.bans(color).isEmpty then fuccess(None)
+            else if s.confirmedBans(color) then fuccess(Some(s)) // 이미 확정됨
+            else
+              val confirmed = s.confirmBans(color)
+              // 양측 모두 확정되면 Game1Shuffling phase로 전환
+              val updated =
+                if confirmed.bothBansConfirmed then confirmed.setPhase(Series.Phase.Game1Shuffling)
+                else confirmed
+              repo.update(updated).inject(Some(updated))
+
+  // 밴 확정 취소
+  def cancelConfirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.colorOf(userId) match
+          case None => fuccess(None)
+          case Some(color) =>
+            if s.phase != Series.Phase.Banning then fuccess(None)
+            else if !s.confirmedBans(color) then fuccess(Some(s)) // 이미 취소됨
+            else
+              val updated = s.cancelConfirmBans(color)
+              repo.update(updated).inject(Some(updated))
 
   // Game 1 오프닝 결정 (밴된 오프닝 중 랜덤)
   def selectGame1Opening(seriesId: SeriesId): Fu[Option[Series]] =
