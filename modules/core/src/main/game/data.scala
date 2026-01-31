@@ -4,7 +4,7 @@ package game
 import _root_.chess.format.pgn.PgnStr
 import _root_.chess.{ ByColor, Centis, Color, Ply }
 
-import lila.core.id.{ SimulId, SwissId, TourId }
+import lila.core.id.{ MatchId, SimulId, SwissId, TourId }
 import lila.core.userId.UserId
 
 case class GameMetadata(
@@ -13,6 +13,7 @@ case class GameMetadata(
     tournamentId: Option[TourId],
     swissId: Option[SwissId],
     simulId: Option[SimulId],
+    matchId: Option[MatchId],
     analysed: Boolean,
     drawOffers: GameDrawOffers,
     rules: Set[GameRule]
@@ -24,7 +25,7 @@ case class GameMetadata(
 
 val emptyDrawOffers = GameDrawOffers(Set.empty, Set.empty)
 val emptyMetadata =
-  GameMetadata(None, None, None, None, None, analysed = false, emptyDrawOffers, rules = Set.empty)
+  GameMetadata(None, None, None, None, None, None, analysed = false, emptyDrawOffers, rules = Set.empty)
 
 def newMetadata(source: Source) = emptyMetadata.copy(source = source.some)
 

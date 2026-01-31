@@ -49,6 +49,9 @@ object id:
   opaque type SwissId = String
   object SwissId extends OpaqueString[SwissId]
 
+  opaque type MatchId = String
+  object MatchId extends OpaqueString[MatchId]
+
   opaque type SimulId = String
   object SimulId extends OpaqueString[SimulId]
 
