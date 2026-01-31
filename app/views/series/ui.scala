@@ -35,9 +35,17 @@ object ui:
             )
             val isCurrent = gid.exists(currentGameId.contains)
             val isInProgress = result.isEmpty && isCurrent
+            val isCompleted = result.isDefined
 
             tr(cls := List("series-score__row" -> true, "current" -> isCurrent))(
-              td(cls := "series-score__game")(s"$round"),
+              td(cls := "series-score__game")(
+                // 완료된 게임은 링크로 표시
+                if isCompleted then
+                  gid.fold(span(s"$round")): id =>
+                    a(href := routes.Round.watcher(id, Color.white), cls := "game-link")(s"$round")
+                else
+                  span(s"$round")
+              ),
               td(cls := "series-score__result")(
                 resultCell(povColor, result, isInProgress, gid)
               ),
@@ -45,8 +53,8 @@ object ui:
                 resultCell(!povColor, result, isInProgress, gid)
               ),
               td(cls := "series-score__opening")(
-                gid.fold(span(opening.name)): id =>
-                  a(href := routes.Round.watcher(id, Color.white))(opening.name)
+                // 오프닝 이름은 lichess 오프닝 페이지로 링크
+                a(href := opening.url, target := "_blank", cls := "opening-link")(opening.name)
               )
             )
         )

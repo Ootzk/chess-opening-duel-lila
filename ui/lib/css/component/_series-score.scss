@@ -42,8 +42,21 @@
         font-weight: bold;
       }
 
-      a {
+      // 결과 셀의 링크는 흰색으로 유지
+      .win,
+      .loss,
+      .draw,
+      .in-progress {
         color: #fff !important;
+      }
+
+      // 오프닝 링크는 밝은 파란색으로 눈에 띄게
+      .opening-link {
+        color: #8ecfff !important;
+
+        &:hover {
+          color: #fff !important;
+        }
       }
     }
 
@@ -57,6 +70,14 @@
     padding: 0.4em 0.6em;
     font-weight: bold;
     color: $c-font-dim;
+
+    .game-link {
+      color: $c-link;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
   }
 
   &__result {
@@ -98,11 +119,11 @@
     padding: 0.4em 0.6em;
     font-size: 0.9em;
 
-    a {
-      color: $c-font;
+    .opening-link {
+      color: $c-link;
 
       &:hover {
-        color: $c-link;
+        text-decoration: underline;
       }
     }
   }

@@ -19,12 +19,14 @@ object BsonHandlers:
         for
           name <- doc.getAsTry[String]("n")
           fen <- doc.getAsTry[String]("f")
-        yield OpeningPreset(name, Fen.Full(fen))
+          url <- doc.getAsTry[String]("u")
+        yield OpeningPreset(name, Fen.Full(fen), url)
       case _ => scala.util.Failure(new Exception("Expected BSONDocument for OpeningPreset"))
 
     def writeTry(op: OpeningPreset) = scala.util.Success(BSONDocument(
       "n" -> op.name,
-      "f" -> op.fen.value
+      "f" -> op.fen.value,
+      "u" -> op.url
     ))
 
   given BSONHandler[Series.Status] = lila.db.dsl.quickHandler(

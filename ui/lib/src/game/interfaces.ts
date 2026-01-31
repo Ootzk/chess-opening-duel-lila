@@ -22,7 +22,7 @@ export interface Series {
   bestOf: number;
   scores: [number, number];
   finished: boolean;
-  openings: { name: string }[];
+  openings: { name: string; url: string }[];
   currentOpening?: string;
 }
 
