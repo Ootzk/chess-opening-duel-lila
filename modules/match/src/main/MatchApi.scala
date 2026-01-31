@@ -33,6 +33,9 @@ final class MatchApi(
 
   def byGameId(gameId: GameId): Fu[Option[Match]] = repo.byGameId(gameId)
 
+  def addFirstGame(matchId: MatchId, gameId: GameId): Funit =
+    repo.addGame(matchId, gameId)
+
   def finishGame(matchId: MatchId, gameId: GameId, winnerColor: Option[Color]): Funit =
     repo.recordResult(matchId, winnerColor).map:
       case Some(m) if m.isFinished =>

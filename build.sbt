@@ -356,7 +356,7 @@ lazy val shutup = module("shutup",
 )
 
 lazy val challenge = module("challenge",
-  Seq(game, room, oauth),
+  Seq(game, room, oauth, `match`),
   Seq(lettuce, catsMtl) ++ tests.bundle
 )
 

@@ -33,7 +33,8 @@ case class Challenge(
     open: Option[Challenge.Open] = None,
     name: Option[String] = None,
     declineReason: Option[Challenge.DeclineReason] = None,
-    rules: Set[GameRule] = Set.empty
+    rules: Set[GameRule] = Set.empty,
+    matchType: Option[Challenge.MatchType] = None
 ) extends hub.Challenge:
 
   import Challenge.*
@@ -151,6 +152,13 @@ object Challenge:
           else if m.is(u2) then ColorChoice.Black.some
           else none
 
+  enum MatchType(val id: Int):
+    case OpeningDuel extends MatchType(1) // Best of 5
+  object MatchType:
+    val byId = values.mapBy(_.id)
+    val byKey = values.mapBy(_.toString.toLowerCase)
+    def apply(key: String): Option[MatchType] = byKey.get(key.toLowerCase)
+
   private def speedOf(timeControl: TimeControl) = timeControl match
     case TimeControl.Clock(config) => Speed(config)
     case _ => Speed.Correspondence
@@ -185,7 +193,8 @@ object Challenge:
       id: Option[GameId] = None,
       openToUserIds: Option[(UserId, UserId)] = None,
       rules: Set[GameRule] = Set.empty,
-      expiresAt: Option[Instant] = None
+      expiresAt: Option[Instant] = None,
+      matchType: Option[MatchType] = None
   ): Challenge =
     val (colorChoice, finalColor) = color match
       case "white" => ColorChoice.White -> chess.White
@@ -219,5 +228,6 @@ object Challenge:
       },
       open = isOpen.option(Open(openToUserIds)),
       name = name,
-      rules = rules
+      rules = rules,
+      matchType = matchType
     )

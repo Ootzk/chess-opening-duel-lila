@@ -38,6 +38,7 @@ private object BSONHandlers:
   given BSONHandler[Variant] = variantByIdHandler
   given BSONHandler[Status] = valueMapHandler(Status.byId)(_.id)
   given BSONHandler[DeclineReason] = valueMapHandler(DeclineReason.byKey)(_.key)
+  given BSONHandler[MatchType] = valueMapHandler(MatchType.byId)(_.id)
 
   given BSON[Rating] with
     def reads(r: Reader) = Rating(r.get("i"), r.yesnoD("p"))
