@@ -4,23 +4,47 @@ import chess.format.Fen
 import chess.variant.Variant
 import chess.{ Position, ByColor, Rated }
 
+import lila.core.id.MatchId
 import lila.core.user.GameUser
 
 final private class ChallengeJoiner(
     gameRepo: lila.game.GameRepo,
     userApi: lila.core.user.UserApi,
-    onStart: lila.core.game.OnStart
+    onStart: lila.core.game.OnStart,
+    matchApi: lila.`match`.MatchApi
 )(using Executor, Scheduler):
 
   def apply(c: Challenge, destUser: GameUser): FuRaise[String, Pov] = for
     exists <- gameRepo.exists(c.gameId)
     _ <- raiseIf(exists)("The challenge has already been accepted")
     origUser <- c.challengerUserId.so(userApi.byIdWithPerf(_, c.perfType))
-    game = ChallengeJoiner.createGame(c, origUser, destUser)
+    matchId <- createMatchIfNeeded(c, origUser, destUser)
+    game = ChallengeJoiner.createGame(c, origUser, destUser, matchId)
     _ <- gameRepo.insertDenormalized(game)
+    _ <- matchId.so(mid => matchApi.addFirstGame(mid, game.id))
     _ <- onStartOrRetry(game.id).recover: _ =>
       logger.error(s"onStart failed for game ${game.id}")
   yield Pov(game, !c.finalColor)
+
+  private def createMatchIfNeeded(
+      c: Challenge,
+      origUser: GameUser,
+      destUser: GameUser
+  ): Fu[Option[MatchId]] =
+    c.matchType match
+      case Some(Challenge.MatchType.OpeningDuel) =>
+        (origUser.map(_.id), destUser.map(_.id)).tupled match
+          case Some((origId, destId)) =>
+            val players = ByColor(
+              white = if c.finalColor.white then origId else destId,
+              black = if c.finalColor.white then destId else origId
+            )
+            val clock = c.timeControl match
+              case Challenge.TimeControl.Clock(config) => config
+              case _ => chess.Clock.Config(chess.Clock.LimitSeconds(300), chess.Clock.IncrementSeconds(0))
+            matchApi.create(players, c.variant, clock, c.initialFen).map(_.id.some)
+          case None => fuccess(none[MatchId]) // Anonymous players can't play matches
+      case _ => fuccess(none[MatchId])
 
   private def onStartOrRetry(id: GameId, retries: Int = 3): Funit =
     onStart
@@ -36,10 +60,11 @@ private object ChallengeJoiner:
   def createGame(
       c: Challenge,
       origUser: GameUser,
-      destUser: GameUser
+      destUser: GameUser,
+      matchId: Option[MatchId] = None
   ): Game =
     val (chessGame, state) = gameSetup(c.variant, c.timeControl, c.initialFen)
-    lila.core.game
+    val game = lila.core.game
       .newGame(
         chess = chessGame,
         players = ByColor: color =>
@@ -52,7 +77,7 @@ private object ChallengeJoiner:
       )
       .withId(c.gameId)
       .pipe(addGameHistory(state))
-      .start
+    matchId.fold(game)(mid => game.copy(metadata = game.metadata.copy(matchId = mid.some))).start
 
   def gameSetup(
       variant: Variant,
