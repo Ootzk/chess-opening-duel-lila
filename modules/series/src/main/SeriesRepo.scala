@@ -19,28 +19,15 @@ final class SeriesRepo(val coll: Coll)(using Executor):
   def update(s: Series): Funit =
     coll.update.one($id(s.id), s).void
 
-  def addGame(seriesId: SeriesId, gameId: GameId): Funit =
-    coll.update
-      .one(
-        $id(seriesId),
-        $push("g" -> gameId) ++ $set("s" -> Series.Status.Started.id)
-      )
-      .void
-
-  def recordResult(seriesId: SeriesId, winnerColor: Option[chess.Color]): Fu[Option[Series]] =
-    byId(seriesId).flatMap:
-      case None => fuccess(None)
-      case Some(s) =>
-        val updated = s.recordResult(winnerColor)
-        update(updated).inject(Some(updated))
-
   def byGameId(gameId: GameId): Fu[Option[Series]] =
-    coll.one[Series]($doc("g" -> gameId))
+    coll.one[Series]($doc("gm.g" -> gameId))
 
   // 두 플레이어로 가장 최근 생성된 series 찾기 (밴픽 리다이렉트용)
-  // "p"는 [whiteUserId, blackUserId] 배열
   def byPlayers(user1: UserId, user2: UserId): Fu[Option[Series]] =
     coll
-      .find($doc("p".$all(List(user1, user2))))
+      .find($or(
+        $doc("p0.u" -> user1, "p1.u" -> user2),
+        $doc("p0.u" -> user2, "p1.u" -> user1)
+      ))
       .sort($doc("ca" -> -1)) // createdAt 내림차순
       .one[Series]

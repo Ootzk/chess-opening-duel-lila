@@ -18,7 +18,7 @@ def sides(
   div(
     side.meta(pov, initialFen, tour, simul, userTv, bookmarked = bookmarked),
     seriesGame
-      .map(s => views.series.ui.seriesScore(s, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(s.colorOf))))
+      .map(s => views.series.ui.seriesScore(s, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(s.playerIndex))))
       .orElse(cross.map: c =>
         div(cls := "crosstable")(ui.crosstable(ctx.userId.foldLeft(c)(_.fromPov(_)), pov.gameId.some)))
   )

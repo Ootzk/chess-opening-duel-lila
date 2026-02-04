@@ -312,8 +312,8 @@ final private[api] class RoundApi(
         Json.obj(
           "id" -> s.id,
           "round" -> s.currentRound,
-          "bestOf" -> s.bestOf,
-          "scores" -> Json.arr(s.scores.white, s.scores.black),
+          "bestOf" -> lila.series.Series.bestOf,
+          "scores" -> Json.arr(s.players._1.score, s.players._2.score),
           "finished" -> s.isFinished,
           "openings" -> s.openings.map(op => Json.obj("name" -> op.name, "url" -> op.url)),
           "currentOpening" -> s.currentOpening.map(_.name)

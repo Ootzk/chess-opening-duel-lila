@@ -1,11 +1,16 @@
 import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type SeriesPickCtrl from './ctrl';
-import type { OpeningPreset } from './interfaces';
+import type { OpeningPreset, SeriesOpening } from './interfaces';
+import { getOpponentBans, getMyBans } from './interfaces';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
   if (ctrl.isShuffling) {
     return renderShuffling(ctrl);
+  }
+  // Selecting phase: 승자는 대기 화면, 패자는 선택 화면
+  if (ctrl.isSelecting && ctrl.isWaitingForOpponentSelect) {
+    return renderWaitingForOpponentSelect(ctrl);
   }
   return h('div.series-pick', [
     renderHeader(ctrl),
@@ -14,32 +19,62 @@ export default function view(ctrl: SeriesPickCtrl): VNode {
   ]);
 }
 
-function renderShuffling(ctrl: SeriesPickCtrl): VNode {
-  const whiteBans = ctrl.series.bans.white;
-  const blackBans = ctrl.series.bans.black;
-  const whiteName = ctrl.series.players.white.user?.name || 'White';
-  const blackName = ctrl.series.players.black.user?.name || 'Black';
-
-  return h('div.series-pick.shuffling', [
+// Selecting phase: 승자가 패자의 선택을 기다리는 화면
+function renderWaitingForOpponentSelect(ctrl: SeriesPickCtrl): VNode {
+  return h('div.series-pick.selecting-waiting', [
     h('div.series-pick__header', [
-      h('h1', 'Game 1 Starting...'),
-      h('div.series-pick__countdown', String(ctrl.shufflingCountdown)),
+      h('h1', 'Opponent Selecting'),
+      h('div.series-pick__timer', { class: { hurry: ctrl.timeLeft <= 10 } }, [
+        h('span.timer-display', String(ctrl.timeLeft)),
+      ]),
     ]),
-    h('div.series-pick__shuffling-boxes', [
-      renderBanBox(ctrl, whiteName, whiteBans),
-      renderBanBox(ctrl, blackName, blackBans),
+    h('div.series-pick__waiting-container', [
+      h('div.series-pick__waiting-message', [
+        h('span.ddloader'),
+        h('span', 'Waiting for opponent to select opening...'),
+      ]),
+    ]),
+    h('div.series-pick__footer', [
+      h('div.series-pick__actions'),
+      h('div.series-pick__chat.mchat', [
+        h('div.mchat__tabs', [h('div.mchat__tab', '\u00a0')]),
+        h('div.mchat__content'),
+      ]),
     ]),
   ]);
 }
 
-function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: OpeningPreset[]): VNode {
+function renderShuffling(ctrl: SeriesPickCtrl): VNode {
+  const povIndex = ctrl.series.povIndex ?? 0;
+  const oppIndex = 1 - povIndex;
+
+  const myBans = getMyBans(ctrl.series);
+  const oppBans = getOpponentBans(ctrl.series);
+
+  const myName = ctrl.series.players[povIndex].user?.name || `Player ${povIndex + 1}`;
+  const oppName = ctrl.series.players[oppIndex].user?.name || `Player ${oppIndex + 1}`;
+  const gameNum = ctrl.series.round;
+
+  return h('div.series-pick.shuffling', [
+    h('div.series-pick__header', [
+      h('h1', `Game ${gameNum} Starting...`),
+      h('div.series-pick__countdown', String(ctrl.shufflingCountdown)),
+    ]),
+    h('div.series-pick__shuffling-boxes', [
+      renderBanBox(ctrl, myName, myBans),
+      renderBanBox(ctrl, oppName, oppBans),
+    ]),
+  ]);
+}
+
+function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpening[]): VNode {
   return h('div.series-pick__ban-box', [
     h('div.series-pick__ban-header', `${playerName}'s Bans`),
     h('div.series-pick__ban-openings', bans.map(opening => renderShufflingOpening(ctrl, opening))),
   ]);
 }
 
-function renderShufflingOpening(ctrl: SeriesPickCtrl, opening: OpeningPreset): VNode {
+function renderShufflingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
   const isHighlighted = ctrl.selectedOpening?.name === opening.name;
 
   return h(

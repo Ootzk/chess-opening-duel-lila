@@ -1,5 +1,5 @@
-import type { PickConfig, SeriesData, OpeningPreset } from './interfaces';
-import { Phase as PhaseId } from './interfaces';
+import type { PickConfig, SeriesData, OpeningPreset, SeriesOpening } from './interfaces';
+import { Phase as PhaseId, getMyPicks, getOpponentPicks, getMyBans, getRemainingPicks, getAllBans } from './interfaces';
 
 export default class SeriesPickCtrl {
   seriesId: string;
@@ -13,8 +13,8 @@ export default class SeriesPickCtrl {
   myConfirmed: boolean = false;
   opponentConfirmed: boolean = false;
 
-  // Game1Shuffling phase state
-  selectedOpening: OpeningPreset | null = null;
+  // Shuffling phase state
+  selectedOpening: SeriesOpening | null = null;
   shufflingCountdown: number = 3;
   gameId: string | null = null;
 
@@ -33,33 +33,37 @@ export default class SeriesPickCtrl {
     // Handle different phases
     if (this.isShuffling) {
       this.startShuffling();
+    } else if (this.isSelecting && this.isWaitingForOpponentSelect) {
+      // Winner waiting for loser to select - poll for state changes
+      this.startTimer();
+      this.startPolling();
     } else {
-      // Start timer for pick/ban phases
+      // Start timer for pick/ban phases and selecting
       this.startTimer();
     }
   }
 
   private initFromSeries(): void {
-    const povColor = this.series.povColor;
-    if (!povColor) return;
+    const povIndex = this.series.povIndex;
+    if (povIndex === undefined) return;
 
-    const oppColor = povColor === 'white' ? 'black' : 'white';
+    const oppIndex = 1 - povIndex;
 
     // Load existing picks
-    const myPicks = this.series.picks[povColor] || [];
+    const myPicks = getMyPicks(this.series);
     myPicks.forEach(p => this.selectedPicks.add(p.name));
 
     // Load existing bans
-    const myBans = this.series.bans[povColor] || [];
+    const myBans = getMyBans(this.series);
     myBans.forEach(b => this.selectedBans.add(b.name));
 
     // Load confirmed state
     if (this.isPicking) {
-      this.myConfirmed = this.series.confirmedPicks[povColor];
-      this.opponentConfirmed = this.series.confirmedPicks[oppColor];
+      this.myConfirmed = this.series.players[povIndex].confirmedPicks;
+      this.opponentConfirmed = this.series.players[oppIndex].confirmedPicks;
     } else if (this.isBanning) {
-      this.myConfirmed = this.series.confirmedBans[povColor];
-      this.opponentConfirmed = this.series.confirmedBans[oppColor];
+      this.myConfirmed = this.series.players[povIndex].confirmedBans;
+      this.opponentConfirmed = this.series.players[oppIndex].confirmedBans;
     }
   }
 
@@ -78,9 +82,31 @@ export default class SeriesPickCtrl {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
     }
+    // Selecting phase: 타임아웃 시 랜덤 선택
+    if (this.isSelecting && this.isMyTurnToSelect) {
+      this.selectRandomOpening();
+      return;
+    }
     // Auto-confirm on timeout
     if (!this.myConfirmed) {
       this.confirm();
+    }
+  }
+
+  // Selecting 타임아웃 시 랜덤 선택
+  private async selectRandomOpening(): Promise<void> {
+    try {
+      const response = await fetch(`/series/${this.seriesId}/selectRandom`, {
+        method: 'POST',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.redirect) {
+          window.location.href = data.redirect;
+        }
+      }
+    } catch (e) {
+      console.error('Error selecting random opening:', e);
     }
   }
 
@@ -97,11 +123,27 @@ export default class SeriesPickCtrl {
   }
 
   get isShuffling(): boolean {
-    return this.phase === PhaseId.Game1Shuffling;
+    return this.phase === PhaseId.Shuffling;
   }
 
   get isWaiting(): boolean {
     return this.myConfirmed && !this.opponentConfirmed;
+  }
+
+  // Selecting phase: 상대가 선택 중인지 (내가 승자인지)
+  get isWaitingForOpponentSelect(): boolean {
+    if (!this.isSelecting) return false;
+    const povIndex = this.series.povIndex;
+    const selectingPlayer = this.series.selectingPlayer;
+    return selectingPlayer !== undefined && selectingPlayer !== povIndex;
+  }
+
+  // Selecting phase: 내가 선택해야 하는지 (내가 패자인지)
+  get isMyTurnToSelect(): boolean {
+    if (!this.isSelecting) return false;
+    const povIndex = this.series.povIndex;
+    const selectingPlayer = this.series.selectingPlayer;
+    return selectingPlayer === povIndex;
   }
 
   get maxPicks(): number {
@@ -126,12 +168,13 @@ export default class SeriesPickCtrl {
       return this.presets;
     } else if (this.isBanning) {
       // Can only ban from opponent's picks
-      const oppColor = this.series.povColor === 'white' ? 'black' : 'white';
-      return this.series.picks[oppColor] || [];
+      const oppPicks = getOpponentPicks(this.series);
+      return oppPicks.map(o => ({ name: o.name, fen: o.fen, url: o.url || '' }));
     } else if (this.isSelecting) {
       // Can only select from own remaining picks
-      const myColor = this.series.povColor || 'white';
-      return this.series.remainingPicks[myColor] || [];
+      const povIndex = this.series.povIndex ?? 0;
+      const remaining = getRemainingPicks(this.series, povIndex);
+      return remaining.map(o => ({ name: o.name, fen: o.fen, url: o.url || '' }));
     }
     return [];
   }
@@ -142,8 +185,8 @@ export default class SeriesPickCtrl {
 
   isOpponentPick(name: string): boolean {
     if (!this.isBanning) return false;
-    const oppColor = this.series.povColor === 'white' ? 'black' : 'white';
-    return (this.series.picks[oppColor] || []).some(p => p.name === name);
+    const oppPicks = getOpponentPicks(this.series);
+    return oppPicks.some(p => p.name === name);
   }
 
   canSelect(name: string): boolean {
@@ -153,6 +196,8 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       return this.isOpponentPick(name) && !this.isSelected(name) && this.selectedBans.size < this.maxBans;
     } else if (this.isSelecting) {
+      // Only the loser can select
+      if (!this.isMyTurnToSelect) return false;
       return this.availableOpenings.some(o => o.name === name);
     }
     return false;
@@ -219,10 +264,11 @@ export default class SeriesPickCtrl {
       if (this.isSelecting) {
         // For selecting, send the chosen opening name
         const selected = Array.from(this.currentSelections)[0];
+        if (!selected) return; // No selection yet
         response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(selected || ''),
+          body: JSON.stringify(selected),
         });
       } else {
         response = await fetch(endpoint, {
@@ -232,15 +278,23 @@ export default class SeriesPickCtrl {
 
       if (response.ok) {
         const data = await response.json();
+
+        // Selecting phase returns redirect URL directly
+        if (this.isSelecting && data.redirect) {
+          console.log('[series] Selecting: Redirecting to game:', data.redirect);
+          window.location.href = data.redirect;
+          return;
+        }
+
         this.myConfirmed = data.myConfirmed ?? true;
         this.opponentConfirmed = data.opponentConfirmed ?? false;
 
         const newPhase = Number(data.phase);
-        console.log('[series] confirm response:', { newPhase, currentPhase: this.phase, Game1Shuffling: PhaseId.Game1Shuffling });
+        console.log('[series] confirm response:', { newPhase, currentPhase: this.phase, Shuffling: PhaseId.Shuffling });
 
         // Phase changed, redirect to appropriate page
         if (newPhase !== this.phase) {
-          if (newPhase === PhaseId.Game1Shuffling) {
+          if (newPhase === PhaseId.Shuffling) {
             console.log('[series] Redirecting to shuffling page');
             window.location.href = `/series/${this.seriesId}/shuffling`;
             return;
@@ -283,11 +337,16 @@ export default class SeriesPickCtrl {
         const newPhase = Number(data.phase);
         // Phase changed, redirect to appropriate page
         if (newPhase !== this.phase) {
-          console.log('[series] poll detected phase change:', { newPhase, currentPhase: this.phase, Game1Shuffling: PhaseId.Game1Shuffling });
+          console.log('[series] poll detected phase change:', { newPhase, currentPhase: this.phase, Shuffling: PhaseId.Shuffling });
           this.stopPolling();
-          if (newPhase === PhaseId.Game1Shuffling) {
+          if (newPhase === PhaseId.Shuffling) {
             console.log('[series] Poll: Redirecting to shuffling page');
             window.location.href = `/series/${this.seriesId}/shuffling`;
+            return;
+          } else if (newPhase === PhaseId.Playing && data.currentGame) {
+            // Playing 상태이고 현재 게임이 있으면 게임으로 직접 이동
+            console.log('[series] Poll: Redirecting to game:', data.currentGame);
+            window.location.href = `/${data.currentGame}`;
             return;
           } else {
             console.log('[series] Poll: Reloading page for phase:', newPhase);
@@ -352,7 +411,8 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       return this.selectedBans.size > 0;
     } else if (this.isSelecting) {
-      return this.currentSelections.size === 1;
+      // Only the loser can confirm in Selecting phase
+      return this.isMyTurnToSelect && this.currentSelections.size === 1;
     }
     return false;
   }
@@ -368,12 +428,12 @@ export default class SeriesPickCtrl {
     this.stopPolling();
   }
 
-  // Game1Shuffling phase methods
+  // Shuffling phase methods
   private startShuffling(): void {
-    // series.openings[0]에서 selectedOpening 가져옴 (백엔드에서 이미 선택됨)
-    const openings = this.series.openings;
-    if (openings && openings.length > 0) {
-      this.selectedOpening = openings[0];
+    // Get first ban opening from openings list
+    const bans = getAllBans(this.series);
+    if (bans.length > 0) {
+      this.selectedOpening = bans[0];
     }
     this.startShufflingCountdown();
     this.redraw();

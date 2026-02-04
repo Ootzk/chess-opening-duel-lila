@@ -12,73 +12,84 @@ final class SeriesJson(
 
   def apply(s: Series, povUserId: Option[UserId]): Fu[JsObject] =
     lightUserApi
-      .asyncMany(List(s.players.white, s.players.black))
+      .asyncMany(List(s.players._1.userId, s.players._2.userId))
       .map: users =>
-        val (white, black) = (users.headOption.flatten, users.lastOption.flatten)
-        val povColor = povUserId.flatMap(s.colorOf)
-        // Pick Phase에서는 상대 픽을 숨김 (동시 비밀 공개 방식)
-        val visiblePicks = if s.phase == Series.Phase.Picking then
-          povColor match
-            case Some(chess.Color.White) => chess.ByColor(s.picks.white, Nil)
-            case Some(chess.Color.Black) => chess.ByColor(Nil, s.picks.black)
-            case None => chess.ByColor.fill(Nil) // 관전자는 양쪽 다 안 보임
+        val (user0, user1) = (users.headOption.flatten, users.lastOption.flatten)
+        val povIndex = povUserId.flatMap(s.playerIndex)
+
+        // Pick Phase에서는 상대 픽을 숨김
+        val visibleOpenings = if s.phase == Series.Phase.Picking then
+          povIndex match
+            case Some(idx) => s.openings.filter(o => o.ownerIndex == idx && o.isPick)
+            case None => Nil
         else
-          s.picks
+          s.openings
+
         Json.obj(
-          "id" -> s.id,
-          "bestOf" -> s.bestOf,
-          "round" -> s.currentRound,
-          "status" -> s.status.id,
+          "id" -> s.id.value,
           "phase" -> s.phase.id,
-          "phaseName" -> s.phase.toString,
-          "players" -> Json.obj(
-            "white" -> userJson(white, s.scores.white),
-            "black" -> userJson(black, s.scores.black)
+          "phaseName" -> phaseName(s.phase),
+          "status" -> s.status.id,
+          "bestOf" -> Series.bestOf,
+          "round" -> s.currentRound,
+          "players" -> Json.arr(
+            playerJson(s.players._1, user0),
+            playerJson(s.players._2, user1)
           ),
-          "scores" -> Json.arr(s.scores.white, s.scores.black),
-          "picks" -> Json.obj(
-            "white" -> visiblePicks.white.map(openingJson),
-            "black" -> visiblePicks.black.map(openingJson)
-          ),
-          "bans" -> Json.obj(
-            "white" -> s.bans.white.map(openingJson),
-            "black" -> s.bans.black.map(openingJson)
-          ),
-          "remainingPicks" -> Json.obj(
-            "white" -> s.remainingPicks(chess.Color.White).map(openingJson),
-            "black" -> s.remainingPicks(chess.Color.Black).map(openingJson)
-          ),
-          "bannedOpenings" -> s.bannedOpenings.map(openingJson),
-          "openings" -> s.openings.map(openingJson),
-          "confirmedPicks" -> Json.obj(
-            "white" -> s.confirmedPicks.white,
-            "black" -> s.confirmedPicks.black
-          ),
-          "confirmedBans" -> Json.obj(
-            "white" -> s.confirmedBans.white,
-            "black" -> s.confirmedBans.black
-          ),
+          "openings" -> visibleOpenings.map(openingJson),
+          "games" -> s.games.map(gameJson),
           "finished" -> s.isFinished,
-          "winner" -> s.winner.map(_.name)
-        ).add("povColor" -> povColor.map(_.name))
-         .add("currentGame" -> s.currentGame.map(_.value))
+          "winner" -> s.winner
+        )
+        .add("povIndex" -> povIndex)
+        .add("currentGame" -> s.currentGameId.map(_.value))
+        .add("selectingPlayer" -> {
+          if s.phase == Series.Phase.Selecting then s.lastGameLoser
+          else None
+        })
 
   def roundInfo(s: Series): JsObject =
     Json.obj(
-      "id" -> s.id,
+      "id" -> s.id.value,
       "round" -> s.currentRound,
-      "bestOf" -> s.bestOf,
-      "scores" -> Json.arr(s.scores.white, s.scores.black)
+      "bestOf" -> Series.bestOf,
+      "scores" -> Json.arr(s.players._1.score, s.players._2.score)
     )
 
-  private def userJson(user: Option[LightUser], score: Int): JsObject =
-    Json
-      .obj("score" -> score)
-      .add("user" -> user.map(u => Json.obj("id" -> u.id, "name" -> u.name)))
-
-  private def openingJson(op: OpeningPreset): JsObject =
+  private def playerJson(p: SeriesPlayer, user: Option[LightUser]): JsObject =
     Json.obj(
-      "name" -> op.name,
-      "fen" -> op.fen.value,
-      "url" -> op.url
-    )
+      "index" -> p.index,
+      "score" -> p.score,
+      "confirmedPicks" -> p.confirmedPicks,
+      "confirmedBans" -> p.confirmedBans
+    ).add("user" -> user.map(u => Json.obj("id" -> u.id, "name" -> u.name)))
+
+  private def openingJson(o: SeriesOpening): JsObject = Json.obj(
+    "id" -> o.id.value,
+    "name" -> o.name,
+    "fen" -> o.fen.value,
+    "url" -> o.url,
+    "source" -> (if o.isPick then "pick" else "ban"),
+    "owner" -> o.ownerIndex,
+    "usedInRound" -> o.usedInRound,
+    "selectedBy" -> o.selectedBy.map(_.toString.toLowerCase)
+  )
+
+  private def gameJson(g: SeriesGame): JsObject = Json.obj(
+    "gameId" -> g.gameId.value,
+    "round" -> g.round,
+    "openingId" -> g.openingId.value,
+    "whitePlayer" -> g.whitePlayerIndex,
+    "result" -> g.result.map:
+      case GameResult.WhiteWins => "white"
+      case GameResult.BlackWins => "black"
+      case GameResult.Draw => "draw"
+  )
+
+  private def phaseName(phase: Series.Phase): String = phase match
+    case Series.Phase.Picking => "Pick Phase"
+    case Series.Phase.Banning => "Ban Phase"
+    case Series.Phase.Shuffling => "Starting..."
+    case Series.Phase.Playing => "Playing"
+    case Series.Phase.Selecting => "Select Opening"
+    case Series.Phase.Finished => "Finished"

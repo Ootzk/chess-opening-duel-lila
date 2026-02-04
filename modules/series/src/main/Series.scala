@@ -1,9 +1,6 @@
 package lila.series
 
 import chess.Clock.Config as ClockConfig
-import chess.format.Fen
-import chess.{ ByColor, Color }
-import reactivemongo.api.bson.Macros.Annotations.Key
 import scalalib.ThreadLocalRandom
 
 import lila.core.id.{ GameId, SeriesId }
@@ -11,138 +8,180 @@ import lila.core.userId.UserId
 import lila.rating.PerfType
 
 case class Series(
-    @Key("_id") id: SeriesId,
-    players: ByColor[UserId],
-    scores: ByColor[Int],
-    gameIds: List[GameId],
-    results: List[Option[Color]], // 각 게임 승자 색상 (None=무승부)
-    currentRound: Int,
+    id: SeriesId,
+    players: (SeriesPlayer, SeriesPlayer),
+    openings: List[SeriesOpening],
+    games: List[SeriesGame],
+    phase: Series.Phase,
     status: Series.Status,
-    phase: Series.Phase,                   // 밴픽 단계
-    picks: ByColor[List[OpeningPreset]],   // 각 플레이어가 픽한 오프닝 (최대 5개)
-    bans: ByColor[List[OpeningPreset]],    // 각 플레이어가 밴한 상대 오프닝 (최대 2개)
-    confirmedPicks: ByColor[Boolean],      // 픽 확정 여부
-    confirmedBans: ByColor[Boolean],       // 밴 확정 여부
-    winner: Option[Color],
     variant: chess.variant.Variant,
     clock: ClockConfig,
-    openings: List[OpeningPreset], // 각 게임의 오프닝 (밴픽 후 결정)
     createdAt: Instant,
-    finishedAt: Option[Instant]
+    finishedAt: Option[Instant] = None
 ):
-  def isCreated = status == Series.Status.Created
-  def isStarted = status == Series.Status.Started
-  def isFinished = status == Series.Status.Finished
-  def isNotFinished = !isFinished
+  // ===== 플레이어 접근 =====
 
-  def bestOf = Series.bestOf
+  def player(index: Int): SeriesPlayer =
+    if index == 0 then players._1 else players._2
+
+  def playerByUserId(userId: UserId): Option[SeriesPlayer] =
+    if players._1.userId == userId then Some(players._1)
+    else if players._2.userId == userId then Some(players._2)
+    else None
+
+  def playerIndex(userId: UserId): Option[Int] =
+    if players._1.userId == userId then Some(0)
+    else if players._2.userId == userId then Some(1)
+    else None
+
+  def opponent(index: Int): SeriesPlayer = player(1 - index)
+
+  // ===== 점수/상태 =====
+
+  def currentRound: Int = games.length + 1
+
+  def isCreated: Boolean = status == Series.Status.Created
+  def isStarted: Boolean = status == Series.Status.Started
+  def isFinished: Boolean = status == Series.Status.Finished
+  def isNotFinished: Boolean = !isFinished
+
+  def winner: Option[Int] =
+    if players._1.score >= Series.winsNeeded then Some(0)
+    else if players._2.score >= Series.winsNeeded then Some(1)
+    else None
+
+  def hasEnded: Boolean = winner.isDefined
 
   def speed = chess.Speed(clock)
   def perfType: PerfType = lila.rating.PerfType(variant, speed)
 
-  def player(color: Color): UserId = players(color)
-  def score(color: Color): Int = scores(color)
+  // ===== 오프닝 필터링 =====
 
-  def colorOf(userId: UserId): Option[Color] =
-    if players.white == userId then Some(Color.White)
-    else if players.black == userId then Some(Color.Black)
-    else None
+  def picks(playerIndex: Int): List[SeriesOpening] =
+    openings.filter(o => o.ownerIndex == playerIndex && o.isPick)
 
-  def currentGame: Option[GameId] = gameIds.lastOption
+  def bans(playerIndex: Int): List[SeriesOpening] =
+    openings.filter(o => o.ownerIndex == playerIndex && o.isBan)
 
-  // 현재 라운드의 오프닝
-  def openingForRound(round: Int): Option[OpeningPreset] =
-    openings.lift(round - 1)
+  def remainingPicks(playerIndex: Int): List[SeriesOpening] =
+    val myPicks = picks(playerIndex)
+    val bannedByOpponent = bans(1 - playerIndex)
+    val bannedNames = bannedByOpponent.map(_.name).toSet
+    myPicks.filterNot(p => bannedNames.contains(p.name))
 
-  // 현재 게임의 오프닝
-  def currentOpening: Option[OpeningPreset] = openingForRound(currentRound)
+  def unusedBans: List[SeriesOpening] =
+    openings.filter(o => o.isBan && !o.isUsed)
 
-  // 게임 ID와 결과를 짝지어 반환 (UI용)
-  def gamesWithResults: List[(GameId, Option[Color])] =
-    gameIds.zipAll(results, GameId(""), None).filter(_._1.value.nonEmpty)
+  def allBans: List[SeriesOpening] =
+    openings.filter(_.isBan)
 
-  def winsNeeded: Int = (bestOf / 2) + 1
+  def bannedOpenings: List[SeriesOpening] = allBans
 
-  def hasEnded: Boolean = scores.white >= winsNeeded || scores.black >= winsNeeded
+  // ===== 게임 색상 배정 =====
 
-  def colorForRound(round: Int): ByColor[UserId] =
-    if round % 2 == 1 then players
-    else players.swap
+  def whitePlayerIndex(round: Int): Int =
+    if round % 2 == 1 then 0 else 1
 
-  def addGame(gameId: GameId): Series =
+  def currentGame: Option[SeriesGame] =
+    games.lastOption.filter(_.result.isEmpty)
+
+  def currentGameId: Option[GameId] =
+    currentGame.map(_.gameId)
+
+  def lastFinishedGame: Option[SeriesGame] =
+    games.reverse.find(_.result.isDefined)
+
+  def lastGameLoser: Option[Int] =
+    lastFinishedGame.flatMap: game =>
+      game.result.flatMap:
+        case GameResult.WhiteWins => Some(1 - game.whitePlayerIndex)
+        case GameResult.BlackWins => Some(game.whitePlayerIndex)
+        case GameResult.Draw => None
+
+  def openingForRound(round: Int): Option[SeriesOpening] =
+    games.find(_.round == round).flatMap(g => openings.find(_.id == g.openingId))
+
+  def currentOpening: Option[SeriesOpening] =
+    currentGame.flatMap(g => openings.find(_.id == g.openingId))
+
+  def gamesWithResults: List[(GameId, Option[Int])] =
+    games.map: g =>
+      val winnerIdx = g.result.flatMap:
+        case GameResult.WhiteWins => Some(g.whitePlayerIndex)
+        case GameResult.BlackWins => Some(1 - g.whitePlayerIndex)
+        case GameResult.Draw => None
+      (g.gameId, winnerIdx)
+
+  // ===== 상태 업데이트 메서드 =====
+
+  def updatePlayer(index: Int, f: SeriesPlayer => SeriesPlayer): Series =
+    if index == 0 then copy(players = (f(players._1), players._2))
+    else copy(players = (players._1, f(players._2)))
+
+  def updatePlayers(f: SeriesPlayer => SeriesPlayer): Series =
+    copy(players = (f(players._1), f(players._2)))
+
+  def addOpening(opening: SeriesOpening): Series =
+    copy(openings = openings :+ opening)
+
+  def addOpenings(newOpenings: List[SeriesOpening]): Series =
+    copy(openings = openings ++ newOpenings)
+
+  def removeOpeningsByOwnerAndSource(ownerIndex: Int, source: OpeningSource): Series =
+    copy(openings = openings.filterNot(o => o.ownerIndex == ownerIndex && o.source == source))
+
+  def markOpeningUsed(openingId: SeriesOpeningId, round: Int, method: SelectionMethod): Series =
+    copy(openings = openings.map: o =>
+      if o.id == openingId then o.markUsed(round, method)
+      else o
+    )
+
+  def addGame(game: SeriesGame): Series =
     copy(
-      gameIds = gameIds :+ gameId,
+      games = games :+ game,
       status = if status == Series.Status.Created then Series.Status.Started else status
     )
 
-  def recordResult(winnerColor: Option[Color]): Series =
-    val newScores = winnerColor match
-      case Some(color) => scores.update(color, _ + 1)
-      case None        => scores // draw doesn't count
-    val finished = newScores.white >= winsNeeded || newScores.black >= winsNeeded
+  def finishGame(gameId: GameId, result: GameResult): Series =
+    val updatedGames = games.map: g =>
+      if g.gameId == gameId then g.copy(result = Some(result))
+      else g
+
+    val winnerIndex = games.find(_.gameId == gameId).flatMap: game =>
+      result match
+        case GameResult.WhiteWins => Some(game.whitePlayerIndex)
+        case GameResult.BlackWins => Some(1 - game.whitePlayerIndex)
+        case GameResult.Draw => None
+
+    val updatedPlayers = winnerIndex match
+      case Some(0) => (players._1.addWin, players._2)
+      case Some(1) => (players._1, players._2.addWin)
+      case _ => players
+
+    val finished = updatedPlayers._1.score >= Series.winsNeeded ||
+                   updatedPlayers._2.score >= Series.winsNeeded
+
     copy(
-      scores = newScores,
-      results = results :+ winnerColor,
-      currentRound = if finished then currentRound else currentRound + 1,
+      games = updatedGames,
+      players = updatedPlayers,
       status = if finished then Series.Status.Finished else status,
-      winner = if finished then Some(if newScores.white >= winsNeeded then Color.White else Color.Black) else None,
-      finishedAt = if finished then Some(nowInstant) else None
+      finishedAt = if finished then Some(nowInstant) else finishedAt
     )
 
-  // 밴픽 관련 헬퍼 메서드
-
-  // 플레이어의 남은 픽 (상대에게 밴되지 않은 것)
-  def remainingPicks(color: Color): List[OpeningPreset] =
-    val myPicks = picks(color)
-    val opponentBans = bans(!color)
-    myPicks.filterNot(p => opponentBans.exists(_.name == p.name))
-
-  // 밴된 모든 오프닝 (양측 합산)
-  def bannedOpenings: List[OpeningPreset] =
-    bans.white ++ bans.black
-
-  // 픽 설정
-  def setPicks(color: Color, newPicks: List[OpeningPreset]): Series =
-    copy(picks = picks.update(color, _ => newPicks))
-
-  // 밴 설정
-  def setBans(color: Color, newBans: List[OpeningPreset]): Series =
-    copy(bans = bans.update(color, _ => newBans))
-
-  // 페이즈 변경
   def setPhase(newPhase: Series.Phase): Series =
     copy(phase = newPhase)
 
-  // 픽 확정
-  def confirmPicks(color: Color): Series =
-    copy(confirmedPicks = confirmedPicks.update(color, _ => true))
+  def bothPicksConfirmed: Boolean =
+    players._1.confirmedPicks && players._2.confirmedPicks
 
-  // 픽 확정 취소
-  def cancelConfirmPicks(color: Color): Series =
-    copy(confirmedPicks = confirmedPicks.update(color, _ => false))
-
-  // 밴 확정
-  def confirmBans(color: Color): Series =
-    copy(confirmedBans = confirmedBans.update(color, _ => true))
-
-  // 밴 확정 취소
-  def cancelConfirmBans(color: Color): Series =
-    copy(confirmedBans = confirmedBans.update(color, _ => false))
-
-  // 양측 픽 확정 여부
-  def bothPicksConfirmed: Boolean = confirmedPicks.white && confirmedPicks.black
-
-  // 양측 밴 확정 여부
-  def bothBansConfirmed: Boolean = confirmedBans.white && confirmedBans.black
-
-  // 오프닝 추가 (게임 시작 시)
-  def addOpening(opening: OpeningPreset): Series =
-    copy(openings = openings :+ opening)
+  def bothBansConfirmed: Boolean =
+    players._1.confirmedBans && players._2.confirmedBans
 
 object Series:
-
   val bestOf = 5
   val winsNeeded = 3
+  val maxPicks = 5
+  val maxBans = 2
 
   enum Status(val id: Int):
     case Created extends Status(10)
@@ -152,14 +191,13 @@ object Series:
   object Status:
     def apply(id: Int): Option[Status] = values.find(_.id == id)
 
-  // 밴픽 단계
   enum Phase(val id: Int):
-    case Picking extends Phase(10)        // 각자 5개 오프닝 픽
-    case Banning extends Phase(20)        // 상대 픽 중 2개 밴
-    case Game1Shuffling extends Phase(25) // Game 1 랜덤 선택 애니메이션 (10초)
-    case Playing extends Phase(30)        // 게임 진행 중
-    case Selecting extends Phase(40)      // 패자가 다음 오프닝 선택 (Game 2+)
-    case Finished extends Phase(50)       // 시리즈 종료
+    case Picking extends Phase(10)
+    case Banning extends Phase(20)
+    case Shuffling extends Phase(25)
+    case Playing extends Phase(30)
+    case Selecting extends Phase(40)
+    case Finished extends Phase(50)
 
   object Phase:
     def apply(id: Int): Option[Phase] = values.find(_.id == id)
@@ -167,26 +205,22 @@ object Series:
   def makeId: SeriesId = SeriesId(ThreadLocalRandom.nextString(8))
 
   def make(
-      players: ByColor[UserId],
+      player0: UserId,
+      player1: UserId,
       variant: chess.variant.Variant,
       clock: ClockConfig
   ): Series = Series(
     id = makeId,
-    players = players,
-    scores = ByColor.fill(0),
-    gameIds = Nil,
-    results = Nil,
-    currentRound = 1,
-    status = Status.Created,
+    players = (
+      SeriesPlayer(player0, index = 0),
+      SeriesPlayer(player1, index = 1)
+    ),
+    openings = Nil,
+    games = Nil,
     phase = Phase.Picking,
-    picks = ByColor.fill(Nil),
-    bans = ByColor.fill(Nil),
-    confirmedPicks = ByColor.fill(false),
-    confirmedBans = ByColor.fill(false),
-    winner = None,
+    status = Status.Created,
     variant = variant,
     clock = clock,
-    openings = Nil, // 밴픽 완료 후 결정
     createdAt = nowInstant,
     finishedAt = None
   )

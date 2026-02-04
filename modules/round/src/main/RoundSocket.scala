@@ -193,6 +193,12 @@ final class RoundSocket(
   Bus.sub[lila.game.actorApi.NotifyRematch]: rematch =>
     rounds.tellIfPresent(rematch.rematchOf, rematch)
 
+  Bus.sub[lila.game.actorApi.NotifySeriesSelecting]: selecting =>
+    rounds.tellIfPresent(selecting.oldGameId, selecting)
+
+  Bus.sub[lila.game.actorApi.NotifySeriesShuffling]: shuffling =>
+    rounds.tellIfPresent(shuffling.oldGameId, shuffling)
+
   Bus.sub[FishnetStart.type](rounds.tellAll(_))
   Bus.sub[TellMany]:
     case TellMany(gameIds, msg) => rounds.tellIds(gameIds, msg)

@@ -1,7 +1,6 @@
 package lila.series
 
 import com.softwaremill.macwire.*
-import play.api.Configuration
 
 import lila.common.Bus
 import lila.core.config.*
@@ -11,12 +10,9 @@ import lila.db.dsl.Coll
 final class Env(
     db: lila.db.Db,
     gameRepo: lila.core.game.GameRepo,
-    newPlayer: lila.core.game.NewPlayer,
     userApi: lila.core.user.UserApi,
     onStart: lila.core.game.OnStart,
-    cacheApi: lila.memo.CacheApi,
-    lightUserApi: lila.core.user.LightUserApi,
-    baseUrl: BaseUrl
+    lightUserApi: lila.core.user.LightUserApi
 )(using
     Executor,
     lila.core.game.IdGenerator
@@ -36,13 +32,24 @@ final class Env(
       game.metadata.seriesId.foreach: seriesId =>
         api.finishGame(seriesId, game.id, game.winnerUserId)
 
-  // When a series game finishes but series continues, create next game and redirect players
+  // When a series game finishes but series continues (Game 1 only)
+  // Game 2+ with winner goes to Selecting, Game 2+ draw goes to Shuffling
   Bus.sub[SeriesGameFinished]:
     case SeriesGameFinished(s, oldGameId, _) =>
       api.createNextGame(s.id).foreach:
         case Some(newGame) =>
           Bus.pub(lila.game.actorApi.NotifyRematch(oldGameId, newGame))
         case None => ()
+
+  // When entering Selecting phase (Game 2+ with winner)
+  Bus.sub[SeriesEnterSelecting]:
+    case SeriesEnterSelecting(s, oldGameId) =>
+      Bus.pub(lila.game.actorApi.NotifySeriesSelecting(s.id, oldGameId))
+
+  // When draw occurs in Game 2+ - redirect to shuffling page
+  Bus.sub[SeriesDrawShuffling]:
+    case SeriesDrawShuffling(s, oldGameId) =>
+      Bus.pub(lila.game.actorApi.NotifySeriesShuffling(s.id, oldGameId))
 
   // When series is finished
   Bus.sub[SeriesFinished]:

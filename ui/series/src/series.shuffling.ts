@@ -34,7 +34,7 @@ export function initModule(config: ShufflingConfig): void {
       // Game is already created in confirmBans, just redirect
       if (gameId) {
         console.log('[shuffling] Redirecting to game:', gameId);
-        window.location.href = `/round/${gameId}/${povColor}`;
+        window.location.href = `/${gameId}/${povColor}`;
       } else {
         console.error('[shuffling] No game ID found!');
       }

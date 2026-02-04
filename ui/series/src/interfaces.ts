@@ -4,8 +4,30 @@ export interface OpeningPreset {
   url: string;
 }
 
+export interface SeriesOpening {
+  id: string;
+  name: string;
+  fen: string;
+  url?: string;
+  source: 'pick' | 'ban';
+  owner: number; // 0 or 1 (player index)
+  usedInRound?: number;
+  selectedBy?: 'loserchoice' | 'systemrandom' | 'timeout';
+}
+
+export interface SeriesGame {
+  gameId: string;
+  round: number;
+  openingId: string;
+  whitePlayer: number; // 0 or 1
+  result?: 'white' | 'black' | 'draw';
+}
+
 export interface SeriesPlayer {
+  index: number;
   score: number;
+  confirmedPicks: boolean;
+  confirmedBans: boolean;
   user?: {
     id: string;
     name: string;
@@ -19,36 +41,14 @@ export interface SeriesData {
   bestOf: number;
   round: number;
   status: number;
-  scores: [number, number];
-  players: {
-    white: SeriesPlayer;
-    black: SeriesPlayer;
-  };
-  picks: {
-    white: OpeningPreset[];
-    black: OpeningPreset[];
-  };
-  bans: {
-    white: OpeningPreset[];
-    black: OpeningPreset[];
-  };
-  remainingPicks: {
-    white: OpeningPreset[];
-    black: OpeningPreset[];
-  };
-  bannedOpenings: OpeningPreset[];
-  openings: OpeningPreset[];
-  confirmedPicks: {
-    white: boolean;
-    black: boolean;
-  };
-  confirmedBans: {
-    white: boolean;
-    black: boolean;
-  };
-  povColor?: 'white' | 'black';
+  players: [SeriesPlayer, SeriesPlayer];
+  openings: SeriesOpening[];
+  games: SeriesGame[];
+  povIndex?: number; // 0 or 1 (current user's player index)
+  currentGame?: string;
+  selectingPlayer?: number; // 0 or 1
   finished: boolean;
-  winner?: string;
+  winner?: number; // 0 or 1
 }
 
 export interface PickConfig {
@@ -63,8 +63,46 @@ export interface PickConfig {
 export const Phase = {
   Picking: 10,
   Banning: 20,
-  Game1Shuffling: 25,
+  Shuffling: 25, // renamed from Game1Shuffling
   Playing: 30,
   Selecting: 40,
   Finished: 50,
 } as const;
+
+// Helper functions
+export function getMyPicks(data: SeriesData): SeriesOpening[] {
+  if (data.povIndex === undefined) return [];
+  return data.openings.filter(o => o.owner === data.povIndex && o.source === 'pick');
+}
+
+export function getOpponentPicks(data: SeriesData): SeriesOpening[] {
+  if (data.povIndex === undefined) return [];
+  const oppIndex = 1 - data.povIndex;
+  return data.openings.filter(o => o.owner === oppIndex && o.source === 'pick');
+}
+
+export function getMyBans(data: SeriesData): SeriesOpening[] {
+  if (data.povIndex === undefined) return [];
+  return data.openings.filter(o => o.owner === data.povIndex && o.source === 'ban');
+}
+
+export function getOpponentBans(data: SeriesData): SeriesOpening[] {
+  if (data.povIndex === undefined) return [];
+  const oppIndex = 1 - data.povIndex;
+  return data.openings.filter(o => o.owner === oppIndex && o.source === 'ban');
+}
+
+export function getRemainingPicks(data: SeriesData, playerIndex: number): SeriesOpening[] {
+  const picks = data.openings.filter(o => o.owner === playerIndex && o.source === 'pick');
+  const oppBans = data.openings.filter(o => o.owner === (1 - playerIndex) && o.source === 'ban');
+  const bannedNames = new Set(oppBans.map(b => b.name));
+  return picks.filter(p => !bannedNames.has(p.name));
+}
+
+export function getAllBans(data: SeriesData): SeriesOpening[] {
+  return data.openings.filter(o => o.source === 'ban');
+}
+
+export function getUnusedBans(data: SeriesData): SeriesOpening[] {
+  return data.openings.filter(o => o.source === 'ban' && !o.usedInRound);
+}

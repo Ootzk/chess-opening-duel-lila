@@ -481,8 +481,8 @@ POST  /series/$id<\w{8}>/confirmPicks         controllers.Series.confirmPicks(id
 POST  /series/$id<\w{8}>/cancelConfirmPicks   controllers.Series.cancelConfirmPicks(id: SeriesId)
 POST  /series/$id<\w{8}>/confirmBans          controllers.Series.confirmBans(id: SeriesId)
 POST  /series/$id<\w{8}>/cancelConfirmBans    controllers.Series.cancelConfirmBans(id: SeriesId)
-POST  /series/$id<\w{8}>/selectGame1Opening   controllers.Series.selectGame1Opening(id: SeriesId)
 POST  /series/$id<\w{8}>/selectOpening        controllers.Series.selectNextOpening(id: SeriesId)
+POST  /series/$id<\w{8}>/selectRandom         controllers.Series.selectRandomOpening(id: SeriesId)
 
 # Simul
 GET   /simul                                  controllers.Simul.home

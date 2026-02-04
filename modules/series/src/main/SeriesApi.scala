@@ -2,7 +2,7 @@ package lila.series
 
 import chess.Clock.Config as ClockConfig
 import chess.format.Fen
-import chess.{ ByColor, Color }
+import chess.ByColor
 
 import lila.common.Bus
 import lila.core.id.{ GameId, SeriesId }
@@ -12,243 +12,332 @@ import lila.core.userId.UserId
 final class SeriesApi(
     repo: SeriesRepo,
     gameRepo: lila.core.game.GameRepo,
-    newPlayer: lila.core.game.NewPlayer,
     userApi: lila.core.user.UserApi,
-    onStart: lila.core.game.OnStart,
-    cacheApi: lila.memo.CacheApi
+    onStart: lila.core.game.OnStart
 )(using Executor, lila.core.game.IdGenerator):
 
   import lila.core.game.Game
 
   def create(
-      players: ByColor[UserId],
+      player0: UserId,
+      player1: UserId,
       variant: chess.variant.Variant,
       clock: ClockConfig
   ): Fu[Series] =
-    val s = Series.make(players, variant, clock)
+    val s = Series.make(player0, player1, variant, clock)
     repo.insert(s).inject(s)
 
   def byId(id: SeriesId): Fu[Option[Series]] = repo.byId(id)
 
   def byGameId(gameId: GameId): Fu[Option[Series]] = repo.byGameId(gameId)
 
-  // 밴픽 관련 메서드
+  // ===== 픽 설정 =====
 
-  // 플레이어의 픽 설정 (최대 5개)
-  def setPicks(seriesId: SeriesId, userId: UserId, picks: List[OpeningPreset]): Fu[Option[Series]] =
+  def setPicks(seriesId: SeriesId, userId: UserId, presets: List[OpeningPreset]): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        s.colorOf(userId) match
+        s.playerIndex(userId) match
           case None => fuccess(None)
-          case Some(color) =>
+          case Some(idx) =>
             if s.phase != Series.Phase.Picking then fuccess(None)
             else
-              val limitedPicks = picks.take(5)
-              val updated = s.setPicks(color, limitedPicks)
+              val withoutOldPicks = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
+              val newPicks = presets.take(Series.maxPicks).map: preset =>
+                SeriesOpening.makePick(preset, idx)
+              val updated = withoutOldPicks.addOpenings(newPicks)
               repo.update(updated).inject(Some(updated))
 
-  // 플레이어의 밴 설정 (최대 2개, 상대 픽에서만 선택 가능)
-  def setBans(seriesId: SeriesId, userId: UserId, bans: List[OpeningPreset]): Fu[Option[Series]] =
+  // ===== 밴 설정 =====
+
+  def setBans(seriesId: SeriesId, userId: UserId, presets: List[OpeningPreset]): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        s.colorOf(userId) match
+        s.playerIndex(userId) match
           case None => fuccess(None)
-          case Some(color) =>
+          case Some(idx) =>
             if s.phase != Series.Phase.Banning then fuccess(None)
             else
-              // 상대방의 픽에서만 밴 가능
-              val opponentPicks = s.picks(!color)
-              val validBans = bans.filter(b => opponentPicks.exists(_.name == b.name)).take(2)
-              val updated = s.setBans(color, validBans)
+              val opponentPicks = s.picks(1 - idx).map(_.name).toSet
+              val validPresets = presets.filter(p => opponentPicks.contains(p.name))
+
+              val withoutOldBans = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Ban)
+              val newBans = validPresets.take(Series.maxBans).map: preset =>
+                SeriesOpening.makeBan(preset, idx)
+              val updated = withoutOldBans.addOpenings(newBans)
               repo.update(updated).inject(Some(updated))
 
-  // 픽 확정 (플레이어별로 confirm, 양측 완료 시 페이즈 전환)
+  // ===== 픽 확정 =====
+
   def confirmPicks(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        s.colorOf(userId) match
+        s.playerIndex(userId) match
           case None => fuccess(None)
-          case Some(color) =>
+          case Some(idx) =>
             if s.phase != Series.Phase.Picking then fuccess(None)
-            else if s.picks(color).isEmpty then fuccess(None)
-            else if s.confirmedPicks(color) then fuccess(Some(s)) // 이미 확정됨
+            else if s.picks(idx).isEmpty then fuccess(None)
+            else if s.player(idx).confirmedPicks then fuccess(Some(s))
             else
-              val confirmed = s.confirmPicks(color)
-              // 양측 모두 확정되면 Banning phase로 전환
+              val confirmed = s.updatePlayer(idx, _.confirmPicks)
               val updated =
                 if confirmed.bothPicksConfirmed then confirmed.setPhase(Series.Phase.Banning)
                 else confirmed
               repo.update(updated).inject(Some(updated))
 
-  // 픽 확정 취소
   def cancelConfirmPicks(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        s.colorOf(userId) match
+        s.playerIndex(userId) match
           case None => fuccess(None)
-          case Some(color) =>
+          case Some(idx) =>
             if s.phase != Series.Phase.Picking then fuccess(None)
-            else if !s.confirmedPicks(color) then fuccess(Some(s)) // 이미 취소됨
+            else if !s.player(idx).confirmedPicks then fuccess(Some(s))
             else
-              val updated = s.cancelConfirmPicks(color)
+              val updated = s.updatePlayer(idx, _.cancelConfirmPicks)
               repo.update(updated).inject(Some(updated))
 
-  // 밴 확정 (플레이어별로 confirm, 양측 완료 시 게임 생성 및 페이즈 전환)
+  // ===== 밴 확정 =====
+
   def confirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        s.colorOf(userId) match
+        s.playerIndex(userId) match
           case None => fuccess(None)
-          case Some(color) =>
+          case Some(idx) =>
             if s.phase != Series.Phase.Banning then fuccess(None)
-            else if s.bans(color).isEmpty then fuccess(None)
-            else if s.confirmedBans(color) then fuccess(Some(s)) // 이미 확정됨
+            else if s.bans(idx).isEmpty then fuccess(None)
+            else if s.player(idx).confirmedBans then fuccess(Some(s))
             else
-              val confirmed = s.confirmBans(color)
-              // 양측 모두 확정되면 오프닝 선택, 게임 생성, Game1Shuffling phase로 전환
+              val confirmed = s.updatePlayer(idx, _.confirmBans)
               if confirmed.bothBansConfirmed then
-                val bannedOpenings = confirmed.bannedOpenings
-                val selectedOpening = scala.util.Random.shuffle(bannedOpenings).head
-                val withOpening = confirmed.addOpening(selectedOpening)
-                val colorMapping = withOpening.colorForRound(withOpening.currentRound)
-                for
-                  whiteUser <- userApi.byIdWithPerf(colorMapping.white, withOpening.perfType)
-                  blackUser <- userApi.byIdWithPerf(colorMapping.black, withOpening.perfType)
-                  game <- makeGame(withOpening, whiteUser, blackUser)
-                  _ <- gameRepo.insertDenormalized(game, Some(selectedOpening.fen))
-                  updated = withOpening.addGame(game.id).setPhase(Series.Phase.Game1Shuffling)
-                  _ <- repo.update(updated)
-                  _ <- onStart.exec(game.id)
-                yield Some(updated)
+                startGame1(confirmed)
               else
                 repo.update(confirmed).inject(Some(confirmed))
 
-  // 밴 확정 취소
   def cancelConfirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        s.colorOf(userId) match
+        s.playerIndex(userId) match
           case None => fuccess(None)
-          case Some(color) =>
+          case Some(idx) =>
             if s.phase != Series.Phase.Banning then fuccess(None)
-            else if !s.confirmedBans(color) then fuccess(Some(s)) // 이미 취소됨
+            else if !s.player(idx).confirmedBans then fuccess(Some(s))
             else
-              val updated = s.cancelConfirmBans(color)
+              val updated = s.updatePlayer(idx, _.cancelConfirmBans)
               repo.update(updated).inject(Some(updated))
 
-  // Game 1 오프닝 결정 (밴된 오프닝 중 랜덤)
-  def selectGame1Opening(seriesId: SeriesId): Fu[Option[Series]] =
-    repo.byId(seriesId).flatMap:
-      case None => fuccess(None)
-      case Some(s) =>
-        if s.phase != Series.Phase.Game1Shuffling then fuccess(None)
-        else
-          val bannedOpenings = s.bannedOpenings
-          if bannedOpenings.isEmpty then fuccess(None)
-          else
-            val selectedOpening = scala.util.Random.shuffle(bannedOpenings).head
-            val updated = s.addOpening(selectedOpening).setPhase(Series.Phase.Playing)
-            repo.update(updated).inject(Some(updated))
+  // ===== Game 1 시작 =====
 
-  // 패자가 다음 게임 오프닝 선택 (Game 2+)
-  def selectNextOpening(seriesId: SeriesId, userId: UserId, opening: OpeningPreset): Fu[Option[Series]] =
-    repo.byId(seriesId).flatMap:
-      case None => fuccess(None)
-      case Some(s) =>
-        s.colorOf(userId) match
-          case None => fuccess(None)
-          case Some(color) =>
-            if s.phase != Series.Phase.Selecting then fuccess(None)
-            else
-              // 자기 남은 픽에서만 선택 가능
-              val remaining = s.remainingPicks(color)
-              if !remaining.exists(_.name == opening.name) then fuccess(None)
-              else
-                val updated = s.addOpening(opening).setPhase(Series.Phase.Playing)
-                repo.update(updated).inject(Some(updated))
+  private def startGame1(s: Series): Fu[Option[Series]] =
+    val allBans = s.allBans
+    if allBans.isEmpty then fuccess(None)
+    else
+      val selected = scala.util.Random.shuffle(allBans).head
+      val round = 1
+      val withOpening = s.markOpeningUsed(selected.id, round, SelectionMethod.SystemRandom)
+      val inShuffling = withOpening.setPhase(Series.Phase.Shuffling)
 
-  def addFirstGame(seriesId: SeriesId, gameId: GameId): Funit =
-    repo.addGame(seriesId, gameId)
+      for
+        game <- createGame(inShuffling, round, selected)
+        withGame = inShuffling.addGame(SeriesGame(
+          gameId = game.id,
+          round = round,
+          openingId = selected.id,
+          whitePlayerIndex = inShuffling.whitePlayerIndex(round)
+        ))
+        _ <- repo.update(withGame)
+        _ <- onStart.exec(game.id)
+      yield Some(withGame)
+
+  // ===== 게임 종료 처리 =====
 
   def finishGame(seriesId: SeriesId, gameId: GameId, winnerId: Option[UserId]): Funit =
     repo.byId(seriesId).flatMap:
       case None => funit
       case Some(s) =>
-        // Convert winner userId to series color
-        val winnerSeriesColor = winnerId.flatMap(s.colorOf)
-        repo.recordResult(seriesId, winnerSeriesColor).map:
-          case Some(updated) if updated.isFinished =>
-            Bus.pub(SeriesFinished(updated))
-          case Some(updated) =>
-            Bus.pub(SeriesGameFinished(updated, gameId, winnerId))
-          case _ => ()
+        s.games.find(_.gameId == gameId) match
+          case None => funit
+          case Some(seriesGame) =>
+            val winnerIndex = winnerId.flatMap(s.playerIndex)
+            val result = GameResult.fromWinnerIndex(winnerIndex, seriesGame.whitePlayerIndex)
+            val updated = s.finishGame(gameId, result)
 
-  // 현재 라운드의 게임 조회 (이미 존재하면 반환)
+            if updated.isFinished then
+              val finished = updated.setPhase(Series.Phase.Finished)
+              repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
+            else if result == GameResult.Draw then
+              handleDraw(updated, gameId)
+            else
+              val selecting = updated.setPhase(Series.Phase.Selecting)
+              repo.update(selecting).map(_ => Bus.pub(SeriesEnterSelecting(selecting, gameId)))
+
+  // ===== 무승부 처리 =====
+
+  private def handleDraw(s: Series, oldGameId: GameId): Funit =
+    val unusedBans = s.unusedBans
+    val openingsPool =
+      if unusedBans.nonEmpty then unusedBans
+      else (s.remainingPicks(0) ++ s.remainingPicks(1)).distinctBy(_.name)
+
+    if openingsPool.isEmpty then
+      val finished = s.setPhase(Series.Phase.Finished)
+      repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
+    else
+      val selected = scala.util.Random.shuffle(openingsPool).head
+      val round = s.currentRound
+      val withOpening = s.markOpeningUsed(selected.id, round, SelectionMethod.SystemRandom)
+
+      for
+        game <- createGame(withOpening, round, selected)
+        withGame = withOpening
+          .addGame(SeriesGame(
+            gameId = game.id,
+            round = round,
+            openingId = selected.id,
+            whitePlayerIndex = withOpening.whitePlayerIndex(round)
+          ))
+          .setPhase(Series.Phase.Shuffling)
+        _ <- repo.update(withGame)
+        _ <- onStart.exec(game.id)
+        _ = Bus.pub(SeriesDrawShuffling(withGame, oldGameId))
+      yield ()
+
+  // ===== 패자가 오프닝 선택 =====
+
+  def selectNextOpening(seriesId: SeriesId, userId: UserId, preset: OpeningPreset): Fu[Option[Game]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Selecting then fuccess(None)
+            else if s.lastGameLoser != Some(idx) then fuccess(None)
+            else
+              val remaining = s.remainingPicks(idx)
+              remaining.find(_.name == preset.name) match
+                case None => fuccess(None)
+                case Some(opening) =>
+                  val round = s.currentRound
+                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
+
+                  for
+                    game <- createGame(withOpening, round, opening)
+                    withGame = withOpening
+                      .addGame(SeriesGame(
+                        gameId = game.id,
+                        round = round,
+                        openingId = opening.id,
+                        whitePlayerIndex = withOpening.whitePlayerIndex(round)
+                      ))
+                      .setPhase(Series.Phase.Playing)
+                    _ <- repo.update(withGame)
+                    _ <- onStart.exec(game.id)
+                  yield Some(game)
+
+  // ===== 타임아웃 처리 =====
+
+  def handleSelectingTimeout(seriesId: SeriesId): Fu[Option[Game]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        if s.phase != Series.Phase.Selecting then fuccess(None)
+        else
+          s.lastGameLoser match
+            case None => fuccess(None)
+            case Some(loserIdx) =>
+              val remaining = s.remainingPicks(loserIdx)
+              if remaining.isEmpty then
+                val unusedBans = s.unusedBans
+                if unusedBans.isEmpty then fuccess(None)
+                else selectRandomFromPool(s, unusedBans, SelectionMethod.Timeout)
+              else
+                selectRandomFromPool(s, remaining, SelectionMethod.Timeout)
+
+  private def selectRandomFromPool(
+      s: Series,
+      pool: List[SeriesOpening],
+      method: SelectionMethod
+  ): Fu[Option[Game]] =
+    val selected = scala.util.Random.shuffle(pool).head
+    val round = s.currentRound
+    val withOpening = s.markOpeningUsed(selected.id, round, method)
+
+    for
+      game <- createGame(withOpening, round, selected)
+      withGame = withOpening
+        .addGame(SeriesGame(
+          gameId = game.id,
+          round = round,
+          openingId = selected.id,
+          whitePlayerIndex = withOpening.whitePlayerIndex(round)
+        ))
+        .setPhase(Series.Phase.Playing)
+      _ <- repo.update(withGame)
+      _ <- onStart.exec(game.id)
+    yield Some(game)
+
+  // ===== 레거시 호환 (ChallengeJoiner에서 사용) =====
+
+  def addFirstGame(_seriesId: SeriesId, _gameId: GameId): Funit =
+    // 새 플로우에서는 밴픽 후 게임이 생성되므로 여기서는 아무것도 안 함
+    funit
+
+  // ===== 게임 조회 =====
+
   def getGameForCurrentRound(seriesId: SeriesId): Fu[Option[Game]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
-        // 현재 라운드에 해당하는 게임이 있는지 확인
-        if s.gameIds.length >= s.currentRound then
-          val gameId = s.gameIds(s.currentRound - 1)
-          gameRepo.game(gameId)
-        else
-          fuccess(None)
+        s.currentGame match
+          case Some(sg) => gameRepo.game(sg.gameId)
+          case None => fuccess(None)
 
   def createNextGame(seriesId: SeriesId): Fu[Option[Game]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
-      case Some(s) =>
-        if s.isFinished || s.currentRound > Series.bestOf then fuccess(None)
-        // 이미 현재 라운드에 게임이 있으면 그 게임 반환 (race condition 방지)
-        else if s.gameIds.length >= s.currentRound then
-          val gameId = s.gameIds(s.currentRound - 1)
-          gameRepo.game(gameId)
-        else
-          val colorMapping = s.colorForRound(s.currentRound)
-          val initialFen = s.openingForRound(s.currentRound).map(_.fen)
-          for
-            whiteUser <- userApi.byIdWithPerf(colorMapping.white, s.perfType)
-            blackUser <- userApi.byIdWithPerf(colorMapping.black, s.perfType)
-            game <- makeGame(s, whiteUser, blackUser)
-            _ <- gameRepo.insertDenormalized(game, initialFen)
-            _ <- repo.addGame(s.id, game.id)
-            _ <- onStart.exec(game.id)
-          yield Some(game)
+      case Some(s) => createNextGameInternal(s)
+
+  private def createNextGameInternal(s: Series): Fu[Option[Game]] =
+    if s.isFinished || s.currentRound > Series.bestOf then fuccess(None)
+    else
+      s.currentGame match
+        case Some(sg) => gameRepo.game(sg.gameId)
+        case None => fuccess(None)
+
+  // ===== 게임 생성 =====
+
+  private def createGame(s: Series, round: Int, opening: SeriesOpening): Fu[Game] =
+    val whiteIdx = s.whitePlayerIndex(round)
+    val blackIdx = 1 - whiteIdx
+    for
+      whiteUser <- userApi.byIdWithPerf(s.player(whiteIdx).userId, s.perfType)
+      blackUser <- userApi.byIdWithPerf(s.player(blackIdx).userId, s.perfType)
+      game <- makeGame(s, whiteUser, blackUser, opening.fen)
+      _ <- gameRepo.insertDenormalized(game, Some(opening.fen))
+    yield game
 
   private def makeGame(
       s: Series,
       whiteUser: GameUser,
-      blackUser: GameUser
+      blackUser: GameUser,
+      initialFen: Fen.Full
   )(using idGenerator: lila.core.game.IdGenerator): Fu[Game] =
     idGenerator.game.dmap: id =>
-      // 현재 라운드의 오프닝 가져오기
-      val opening = s.openingForRound(s.currentRound)
-      val initialFen = opening.map(_.fen)
-
-      // FEN으로 게임 생성 (FromPosition variant 사용)
-      val chessGame = initialFen match
-        case Some(fen) =>
-          Fen.readWithMoveNumber(chess.variant.FromPosition, fen) match
-            case Some(sit) =>
-              chess.Game(
-                position = sit.position,
-                ply = sit.ply,
-                startedAtPly = sit.ply,
-                clock = chess.Clock(s.clock).some
-              )
-            case None =>
-              // FEN 파싱 실패 시 폴백
-              chess.Game(
-                position = s.variant.initialPosition,
-                clock = chess.Clock(s.clock).some
-              )
+      val chessGame = Fen.readWithMoveNumber(chess.variant.FromPosition, initialFen) match
+        case Some(sit) =>
+          chess.Game(
+            position = sit.position,
+            ply = sit.ply,
+            startedAtPly = sit.ply,
+            clock = chess.Clock(s.clock).some
+          )
         case None =>
           chess.Game(
             position = s.variant.initialPosition,
@@ -277,3 +366,5 @@ final class SeriesApi(
 // Events
 case class SeriesFinished(s: Series)
 case class SeriesGameFinished(s: Series, gameId: GameId, winnerId: Option[UserId])
+case class SeriesEnterSelecting(s: Series, oldGameId: GameId)
+case class SeriesDrawShuffling(s: Series, oldGameId: GameId)

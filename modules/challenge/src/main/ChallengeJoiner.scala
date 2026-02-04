@@ -47,14 +47,13 @@ final private class ChallengeJoiner(
       case Some(Challenge.MatchType.OpeningDuel) =>
         (origUser.map(_.id), destUser.map(_.id)).tupled match
           case Some((origId, destId)) =>
-            val players = ByColor(
-              white = if c.finalColor.white then origId else destId,
-              black = if c.finalColor.white then destId else origId
-            )
+            // player0 = white in round 1, player1 = black in round 1
+            val player0 = if c.finalColor.white then origId else destId
+            val player1 = if c.finalColor.white then destId else origId
             val clock = c.timeControl match
               case Challenge.TimeControl.Clock(config) => config
               case _ => chess.Clock.Config(chess.Clock.LimitSeconds(300), chess.Clock.IncrementSeconds(0))
-            seriesApi.create(players, c.variant, clock).map(_.some)
+            seriesApi.create(player0, player1, c.variant, clock).map(_.some)
           case None => fuccess(none[Series]) // Anonymous players can't play series
       case _ => fuccess(none[Series])
 

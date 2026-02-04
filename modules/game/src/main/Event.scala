@@ -224,6 +224,20 @@ object Event:
         .add("cookie" -> cookie)
     override def only = Some(color)
 
+  // Selecting 페이지로 리다이렉트 (Series: 승자 있을 때)
+  case class SeriesSelectingRedirect(color: Color, seriesId: lila.core.id.SeriesId) extends Event:
+    def typ = "redirect"
+    def data = Json.obj("url" -> s"/series/$seriesId/pick")
+    override def only = Some(color)
+    override def owner = true
+
+  // Shuffling 페이지로 리다이렉트 (Series: 무승부일 때)
+  case class SeriesShufflingRedirect(color: Color, seriesId: lila.core.id.SeriesId) extends Event:
+    def typ = "redirect"
+    def data = Json.obj("url" -> s"/series/$seriesId/pick")
+    override def only = Some(color)
+    override def owner = true
+
   case class Promotion(role: PromotableRole, pos: Square) extends Event:
     def typ = "promotion"
     def data =

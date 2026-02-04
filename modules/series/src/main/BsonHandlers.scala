@@ -1,7 +1,6 @@
 package lila.series
 
 import chess.format.Fen
-import chess.{ ByColor, Color }
 import reactivemongo.api.bson.*
 
 import lila.db.BSON
@@ -13,6 +12,7 @@ object BsonHandlers:
   given BSONHandler[chess.variant.Variant] = variantByKeyHandler
   given BSONHandler[chess.Clock.Config] = clockConfigHandler
 
+  // OpeningPreset
   given BSONHandler[OpeningPreset] = new BSONHandler[OpeningPreset]:
     def readTry(bson: BSONValue) = bson match
       case doc: BSONDocument =>
@@ -29,76 +29,140 @@ object BsonHandlers:
       "u" -> op.url
     ))
 
-  given BSONHandler[Series.Status] = lila.db.dsl.quickHandler(
+  // OpeningSource
+  given BSONHandler[OpeningSource] = quickHandler[OpeningSource](
+    { case BSONString("pick") => OpeningSource.Pick
+      case _ => OpeningSource.Ban },
+    { case OpeningSource.Pick => BSONString("pick")
+      case OpeningSource.Ban => BSONString("ban") }
+  )
+
+  // SelectionMethod
+  given BSONHandler[SelectionMethod] = quickHandler[SelectionMethod](
+    { case BSONString("loser") => SelectionMethod.LoserChoice
+      case BSONString("random") => SelectionMethod.SystemRandom
+      case _ => SelectionMethod.Timeout },
+    { case SelectionMethod.LoserChoice => BSONString("loser")
+      case SelectionMethod.SystemRandom => BSONString("random")
+      case SelectionMethod.Timeout => BSONString("timeout") }
+  )
+
+  // SeriesOpeningId
+  given BSONHandler[SeriesOpeningId] = stringAnyValHandler(_.value, SeriesOpeningId(_))
+
+  // SeriesOpening
+  given BSONDocumentHandler[SeriesOpening] = new BSONDocumentHandler[SeriesOpening]:
+    def readDocument(doc: BSONDocument) =
+      for
+        id <- doc.getAsTry[SeriesOpeningId]("i")
+        name <- doc.getAsTry[String]("n")
+        fen <- doc.getAsTry[String]("f")
+        url = doc.getAsOpt[String]("u")
+        source <- doc.getAsTry[OpeningSource]("s")
+        ownerIndex <- doc.getAsTry[Int]("o")
+        usedInRound = doc.getAsOpt[Int]("r")
+        selectedBy = doc.getAsOpt[SelectionMethod]("m")
+      yield SeriesOpening(id, name, Fen.Full(fen), url, source, ownerIndex, usedInRound, selectedBy)
+
+    def writeTry(o: SeriesOpening) = scala.util.Success($doc(
+      "i" -> o.id,
+      "n" -> o.name,
+      "f" -> o.fen.value,
+      "u" -> o.url,
+      "s" -> o.source,
+      "o" -> o.ownerIndex,
+      "r" -> o.usedInRound,
+      "m" -> o.selectedBy
+    ))
+
+  // SeriesPlayer
+  given BSONDocumentHandler[SeriesPlayer] = new BSONDocumentHandler[SeriesPlayer]:
+    def readDocument(doc: BSONDocument) =
+      for
+        userId <- doc.getAsTry[UserId]("u")
+        index <- doc.getAsTry[Int]("i")
+        score = doc.getAsOpt[Int]("s").getOrElse(0)
+        confirmedPicks = doc.getAsOpt[Boolean]("cp").getOrElse(false)
+        confirmedBans = doc.getAsOpt[Boolean]("cb").getOrElse(false)
+      yield SeriesPlayer(userId, index, score, confirmedPicks, confirmedBans)
+
+    def writeTry(p: SeriesPlayer) = scala.util.Success($doc(
+      "u" -> p.userId,
+      "i" -> p.index,
+      "s" -> p.score,
+      "cp" -> p.confirmedPicks,
+      "cb" -> p.confirmedBans
+    ))
+
+  // GameResult
+  given BSONHandler[GameResult] = quickHandler[GameResult](
+    { case BSONInteger(1) => GameResult.WhiteWins
+      case BSONInteger(-1) => GameResult.BlackWins
+      case _ => GameResult.Draw },
+    { case GameResult.WhiteWins => BSONInteger(1)
+      case GameResult.BlackWins => BSONInteger(-1)
+      case GameResult.Draw => BSONInteger(0) }
+  )
+
+  // SeriesGame
+  given BSONDocumentHandler[SeriesGame] = new BSONDocumentHandler[SeriesGame]:
+    def readDocument(doc: BSONDocument) =
+      for
+        gameId <- doc.getAsTry[GameId]("g")
+        round <- doc.getAsTry[Int]("r")
+        openingId <- doc.getAsTry[SeriesOpeningId]("o")
+        whitePlayerIndex <- doc.getAsTry[Int]("w")
+        result = doc.getAsOpt[GameResult]("rs")
+      yield SeriesGame(gameId, round, openingId, whitePlayerIndex, result)
+
+    def writeTry(g: SeriesGame) = scala.util.Success($doc(
+      "g" -> g.gameId,
+      "r" -> g.round,
+      "o" -> g.openingId,
+      "w" -> g.whitePlayerIndex,
+      "rs" -> g.result
+    ))
+
+  // Series.Status
+  given BSONHandler[Series.Status] = quickHandler(
     { case BSONInteger(id) => Series.Status(id).getOrElse(Series.Status.Created) },
     { s => BSONInteger(s.id) }
   )
 
-  given BSONHandler[Series.Phase] = lila.db.dsl.quickHandler(
+  // Series.Phase
+  given BSONHandler[Series.Phase] = quickHandler(
     { case BSONInteger(id) => Series.Phase(id).getOrElse(Series.Phase.Picking) },
     { p => BSONInteger(p.id) }
   )
 
-  // results 필드용: Option[Color] -> Option[Boolean] (white=true, black=false, draw=None)
-  private def readResults(list: List[BSONValue]): List[Option[Color]] =
-    list.map:
-      case BSONBoolean(true) => Some(Color.White)
-      case BSONBoolean(false) => Some(Color.Black)
-      case _ => None
-
-  private def writeResults(results: List[Option[Color]]): List[BSONValue] =
-    results.map:
-      case Some(Color.White) => BSONBoolean(true)
-      case Some(Color.Black) => BSONBoolean(false)
-      case None => BSONNull
-
+  // Series
   given BSON[Series] with
     def reads(r: BSON.Reader) =
-      val playersList = r.get[List[UserId]]("p")
-      val scoresList = r.get[List[Int]]("sc")
-      val resultsList = r.getO[List[BSONValue]]("rs").getOrElse(Nil)
-      val picksList = r.getO[List[List[OpeningPreset]]]("pk").getOrElse(List(Nil, Nil))
-      val bansList = r.getO[List[List[OpeningPreset]]]("bn").getOrElse(List(Nil, Nil))
-      val confirmedPicksList = r.getO[List[Boolean]]("cpk").getOrElse(List(false, false))
-      val confirmedBansList = r.getO[List[Boolean]]("cbn").getOrElse(List(false, false))
+      val player0 = r.get[SeriesPlayer]("p0")
+      val player1 = r.get[SeriesPlayer]("p1")
       Series(
         id = r.get[SeriesId]("_id"),
-        players = ByColor(playersList.head, playersList.last),
-        scores = ByColor(scoresList.headOption.getOrElse(0), scoresList.lastOption.getOrElse(0)),
-        gameIds = r.get[List[GameId]]("g"),
-        results = readResults(resultsList),
-        currentRound = r.get[Int]("r"),
-        status = r.get[Series.Status]("s"),
-        phase = r.getO[Series.Phase]("ph").getOrElse(Series.Phase.Picking),
-        picks = ByColor(picksList.headOption.getOrElse(Nil), picksList.lastOption.getOrElse(Nil)),
-        bans = ByColor(bansList.headOption.getOrElse(Nil), bansList.lastOption.getOrElse(Nil)),
-        confirmedPicks = ByColor(confirmedPicksList.headOption.getOrElse(false), confirmedPicksList.lastOption.getOrElse(false)),
-        confirmedBans = ByColor(confirmedBansList.headOption.getOrElse(false), confirmedBansList.lastOption.getOrElse(false)),
-        winner = r.getO[Boolean]("w").map(Color.fromWhite),
-        variant = r.get[chess.variant.Variant]("v"),
-        clock = r.get[chess.Clock.Config]("c"),
-        openings = r.getO[List[OpeningPreset]]("op").getOrElse(Nil),
+        players = (player0, player1),
+        openings = r.getO[List[SeriesOpening]]("op").getOrElse(Nil),
+        games = r.getO[List[SeriesGame]]("gm").getOrElse(Nil),
+        phase = r.get[Series.Phase]("ph"),
+        status = r.get[Series.Status]("st"),
+        variant = r.get[chess.variant.Variant]("va"),
+        clock = r.get[chess.Clock.Config]("cl"),
         createdAt = r.get[Instant]("ca"),
         finishedAt = r.getO[Instant]("fa")
       )
-    def writes(w: BSON.Writer, o: Series) =
-      $doc(
-        "_id" -> o.id,
-        "p" -> List(o.players.white, o.players.black),
-        "sc" -> List(o.scores.white, o.scores.black),
-        "g" -> o.gameIds,
-        "rs" -> writeResults(o.results),
-        "r" -> o.currentRound,
-        "s" -> o.status,
-        "ph" -> o.phase,
-        "pk" -> List(o.picks.white, o.picks.black),
-        "bn" -> List(o.bans.white, o.bans.black),
-        "cpk" -> List(o.confirmedPicks.white, o.confirmedPicks.black),
-        "cbn" -> List(o.confirmedBans.white, o.confirmedBans.black),
-        "w" -> o.winner.map(_.white),
-        "v" -> o.variant,
-        "c" -> o.clock,
-        "op" -> o.openings,
-        "ca" -> o.createdAt,
-        "fa" -> o.finishedAt
-      )
+
+    def writes(w: BSON.Writer, s: Series) = $doc(
+      "_id" -> s.id,
+      "p0" -> s.players._1,
+      "p1" -> s.players._2,
+      "op" -> s.openings,
+      "gm" -> s.games,
+      "ph" -> s.phase,
+      "st" -> s.status,
+      "va" -> s.variant,
+      "cl" -> s.clock,
+      "ca" -> s.createdAt,
+      "fa" -> s.finishedAt
+    )

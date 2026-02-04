@@ -1,7 +1,6 @@
 package lila.series
 package ui
 
-import chess.format.Fen
 import play.api.libs.json.{ Json, JsObject }
 
 import lila.ui.*
@@ -9,13 +8,13 @@ import lila.ui.*
 import ScalatagsTemplate.*
 
 final class SeriesUi(helpers: Helpers):
-  import helpers.{ *, given }
+  import helpers.*
 
   def pick(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset])(using Context): Page =
     val phaseName = s.phase match
       case Series.Phase.Picking => "Pick Phase"
       case Series.Phase.Banning => "Ban Phase"
-      case Series.Phase.Game1Shuffling => "Game 1 Starting"
+      case Series.Phase.Shuffling => "Game Starting"
       case Series.Phase.Selecting => "Select Opening"
       case _ => "Opening Duel"
 
@@ -62,7 +61,7 @@ final class SeriesUi(helpers: Helpers):
         )
       )
 
-  private def pageModule(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset])(using ctx: Context) =
+  private def pageModule(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset])(using Context) =
     PageModule(
       "series.pick",
       Json.obj(
@@ -79,8 +78,9 @@ final class SeriesUi(helpers: Helpers):
     ).some
 
   def shuffling(s: Series, seriesJson: JsObject)(using Context): Page =
-    val selectedOpening = s.openings.headOption
-    Page("Opening Duel - Game 1 Starting")
+    val gameNum = s.currentRound
+    val selectedOpening = s.openings.lastOption
+    Page(s"Opening Duel - Game $gameNum Starting")
       .css("series.pick")
       .js(shufflingModule(s, seriesJson))
       .csp(_.withWebAssembly)
@@ -88,26 +88,32 @@ final class SeriesUi(helpers: Helpers):
       .body(
         main(cls := "series-pick shuffling")(
           div(cls := "series-pick__header")(
-            h1("Game 1 Starting..."),
+            h1(s"Game $gameNum Starting..."),
             div(cls := "series-pick__countdown")("3")
           ),
           div(cls := "series-pick__shuffling-boxes")(
-            renderBanBox(s, chess.Color.White, selectedOpening),
-            renderBanBox(s, chess.Color.Black, selectedOpening)
+            renderBanBox(s, 0, selectedOpening),
+            renderBanBox(s, 1, selectedOpening)
           )
         )
       )
 
-  private def renderBanBox(s: Series, color: chess.Color, selectedOpening: Option[OpeningPreset]) =
-    val bans = s.bans(color)
-    val playerName = color.fold("White", "Black")
+  private def renderBanBox(s: Series, playerIndex: Int, selectedOpening: Option[SeriesOpening]) =
+    val bans = s.bans(playerIndex)
+    val usedOpenings = s.openings.filter(_.isUsed).map(_.name).toSet
+    val playerName = s.player(playerIndex).userId.value
     div(cls := "series-pick__ban-box")(
       div(cls := "series-pick__ban-header")(s"$playerName's Bans"),
       div(cls := "series-pick__ban-openings")(
         bans.map: opening =>
           val isHighlighted = selectedOpening.exists(_.name == opening.name)
+          val isUsed = usedOpenings.contains(opening.name) && !isHighlighted
           val boardFen = opening.fen.value.split(" ").headOption.getOrElse("")
-          val openingCls = if isHighlighted then "series-pick__opening highlighted" else "series-pick__opening"
+          val openingCls = List(
+            "series-pick__opening",
+            if isHighlighted then "highlighted" else "",
+            if isUsed then "used" else ""
+          ).filter(_.nonEmpty).mkString(" ")
           div(
             cls := openingCls,
             attr("data-name") := opening.name,
@@ -123,7 +129,7 @@ final class SeriesUi(helpers: Helpers):
       )
     )
 
-  private def shufflingModule(s: Series, seriesJson: JsObject)(using ctx: Context) =
+  private def shufflingModule(s: Series, seriesJson: JsObject)(using Context) =
     PageModule(
       "series.shuffling",
       Json.obj(

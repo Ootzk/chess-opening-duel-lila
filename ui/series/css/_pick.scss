@@ -239,3 +239,46 @@
   transform: scale(1.05);
   transition: all 0.3s ease;
 }
+
+// 이미 사용된 오프닝 (흐리게)
+.series-pick__opening.used {
+  opacity: 0.4;
+  pointer-events: none;
+
+  &::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem;
+    color: $c-good;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+  }
+}
+
+// Selecting phase: 승자 대기 화면
+.series-pick.selecting-waiting {
+  .series-pick__header {
+    @extend %flex-column;
+    text-align: center;
+    margin-bottom: 2rem;
+
+    h1 {
+      margin-bottom: 0.5rem;
+    }
+  }
+}
+
+.series-pick__waiting-container {
+  @extend %flex-center;
+  min-height: 300px;
+  padding: 2rem;
+}
+
+.series-pick__waiting-message {
+  @extend %flex-center;
+  gap: 1rem;
+  font-size: 1.2rem;
+  color: $c-font-dim;
+}

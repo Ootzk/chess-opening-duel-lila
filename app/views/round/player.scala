@@ -69,7 +69,7 @@ def player(
         ui.roundAppPreload(pov),
         div(cls := "round__underboard")(
           seriesGame
-            .map(s => views.series.ui.seriesScore(s, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(s.colorOf))))
+            .map(s => views.series.ui.seriesScore(s, pov.gameId.some, pov.game.finished.option(pov.game.winnerUserId.flatMap(s.playerIndex))))
             .orElse(views.game.ui.crosstable.option(cross, pov.game)),
           (playing.nonEmpty || simul.exists(_.isHost(ctx.me))).option(
             div(cls := "round__now-playing")(
