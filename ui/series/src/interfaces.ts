@@ -96,7 +96,7 @@ export function getRemainingPicks(data: SeriesData, playerIndex: number): Series
   const picks = data.openings.filter(o => o.owner === playerIndex && o.source === 'pick');
   const oppBans = data.openings.filter(o => o.owner === (1 - playerIndex) && o.source === 'ban');
   const bannedNames = new Set(oppBans.map(b => b.name));
-  return picks.filter(p => !bannedNames.has(p.name));
+  return picks.filter(p => !bannedNames.has(p.name) && !p.usedInRound);
 }
 
 export function getAllBans(data: SeriesData): SeriesOpening[] {

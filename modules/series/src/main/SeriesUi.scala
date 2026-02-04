@@ -10,7 +10,7 @@ import ScalatagsTemplate.*
 final class SeriesUi(helpers: Helpers):
   import helpers.*
 
-  def pick(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset])(using Context): Page =
+  def pick(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset], displayOpenings: Vector[OpeningPreset])(using Context): Page =
     val phaseName = s.phase match
       case Series.Phase.Picking => "Pick Phase"
       case Series.Phase.Banning => "Ban Phase"
@@ -32,7 +32,7 @@ final class SeriesUi(helpers: Helpers):
             )
           ),
           div(cls := "series-pick__grid")(
-            presets.map: preset =>
+            displayOpenings.map: preset =>
               // Extract board FEN from full FEN (first part before space)
               val boardFen = preset.fen.value.split(" ").headOption.getOrElse("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
               div(

@@ -67,7 +67,7 @@ case class Series(
     val myPicks = picks(playerIndex)
     val bannedByOpponent = bans(1 - playerIndex)
     val bannedNames = bannedByOpponent.map(_.name).toSet
-    myPicks.filterNot(p => bannedNames.contains(p.name))
+    myPicks.filterNot(p => bannedNames.contains(p.name) || p.isUsed)
 
   def unusedBans: List[SeriesOpening] =
     openings.filter(o => o.isBan && !o.isUsed)

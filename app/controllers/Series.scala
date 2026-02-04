@@ -38,9 +38,19 @@ final class Series(env: Env) extends LilaController(env):
       else if s.isFinished then
         Redirect(routes.Series.show(id))
       else
+        val povIndex = s.playerIndex(me.userId).getOrElse(0)
+        val displayOpenings: Vector[lila.series.OpeningPreset] = s.phase match
+          case lila.series.Series.Phase.Picking => OpeningPresets.all
+          case lila.series.Series.Phase.Banning =>
+            // 상대의 픽을 표시
+            s.picks(1 - povIndex).map(_.toPreset).toVector
+          case lila.series.Series.Phase.Selecting =>
+            // 내 remaining picks만 표시 (사용된 픽과 밴된 픽 제외)
+            s.remainingPicks(povIndex).map(_.toPreset).toVector
+          case _ => OpeningPresets.all
         for
           json <- env.series.jsonView(s, Some(me.userId))
-          page <- Ok.page(views.series.pick(s, json, OpeningPresets.all))
+          page <- Ok.page(views.series.pick(s, json, OpeningPresets.all, displayOpenings))
         yield page
   }
 
