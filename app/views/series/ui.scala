@@ -17,7 +17,10 @@ object ui:
     val oppIndex = 1 - povIndex
 
     // Sudden death 시 5경기 이상도 표시
-    val displayRounds = math.max(Series.bestOf, s.currentRound)
+    // 시리즈 종료 시에는 완료된 게임만, 진행 중에는 현재 라운드까지
+    val finishedGames = s.games.count(_.result.isDefined)
+    val displayRounds = if s.isFinished then math.max(Series.bestOf, finishedGames)
+                        else math.max(Series.bestOf, s.currentRound)
 
     div(cls := "series-score")(
       table(cls := "series-score__table")(
