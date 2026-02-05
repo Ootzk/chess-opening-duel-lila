@@ -189,10 +189,7 @@ function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
         },
         [h('cg-container', [h('cg-board')])],
       ),
-      h('div.series-pick__name', [
-        h('span.opening-name', preset.name),
-        isSelected ? h('span.opening-check', { class: { green: ctrl.isPicking, red: ctrl.isBanning } }) : null,
-      ]),
+      h('div.series-pick__name', [h('span.opening-name', preset.name)]),
     ],
   );
 }
