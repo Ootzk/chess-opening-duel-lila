@@ -75,7 +75,7 @@ final class SeriesJson(
     "name" -> o.name,
     "fen" -> o.fen.value,
     "url" -> o.url,
-    "source" -> (if o.isPick then "pick" else "ban"),
+    "source" -> (if o.isPick then "pick" else if o.isNeutral then "neutral" else "ban"),
     "owner" -> o.ownerIndex,
     "usedInRound" -> o.usedInRound,
     "selectedBy" -> o.selectedBy.map(_.toString.toLowerCase)

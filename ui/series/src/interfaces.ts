@@ -9,8 +9,8 @@ export interface SeriesOpening {
   name: string;
   fen: string;
   url?: string;
-  source: 'pick' | 'ban';
-  owner: number; // 0 or 1 (player index)
+  source: 'pick' | 'ban' | 'neutral';
+  owner: number; // 0, 1 (player index), or -1 (neutral)
   usedInRound?: number;
   selectedBy?: 'loserchoice' | 'systemrandom' | 'timeout';
 }
@@ -106,4 +106,8 @@ export function getAllBans(data: SeriesData): SeriesOpening[] {
 
 export function getUnusedBans(data: SeriesData): SeriesOpening[] {
   return data.openings.filter(o => o.source === 'ban' && !o.usedInRound);
+}
+
+export function getNeutralOpening(data: SeriesData): SeriesOpening | undefined {
+  return data.openings.find(o => o.source === 'neutral');
 }

@@ -2,7 +2,7 @@ import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type SeriesPickCtrl from './ctrl';
 import type { OpeningPreset, SeriesOpening } from './interfaces';
-import { getOpponentBans, getMyBans } from './interfaces';
+import { getOpponentBans, getMyBans, getNeutralOpening } from './interfaces';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
   if (ctrl.isRandomSelecting) {
@@ -50,6 +50,7 @@ function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
 
   const myBans = getMyBans(ctrl.series);
   const oppBans = getOpponentBans(ctrl.series);
+  const neutral = getNeutralOpening(ctrl.series);
 
   const myName = ctrl.series.players[povIndex].user?.name || `Player ${povIndex + 1}`;
   const oppName = ctrl.series.players[oppIndex].user?.name || `Player ${oppIndex + 1}`;
@@ -62,6 +63,7 @@ function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
     ]),
     h('div.series-pick__random-selecting-boxes', [
       renderBanBox(ctrl, myName, myBans),
+      neutral ? renderNeutralBox(ctrl, neutral) : null,
       renderBanBox(ctrl, oppName, oppBans),
     ]),
   ]);
@@ -80,6 +82,25 @@ function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpen
   return h('div.series-pick__ban-box', [
     h('div.series-pick__ban-header', `${playerName}'s Bans`),
     h('div.series-pick__ban-openings', visibleBans.map(opening => renderRandomSelectingOpening(ctrl, opening))),
+  ]);
+}
+
+function renderNeutralBox(ctrl: SeriesPickCtrl, neutral: SeriesOpening): VNode {
+  // Check if neutral was used in a previous round
+  const currentRound = Number(ctrl.series.round);
+  const usedIn = neutral.usedInRound;
+  const isVisible = usedIn === undefined || usedIn === null || Number(usedIn) >= currentRound;
+
+  if (!isVisible) {
+    return h('div.series-pick__neutral-box.used', [
+      h('div.series-pick__neutral-header', 'Neutral'),
+      h('div.series-pick__neutral-empty', 'Used'),
+    ]);
+  }
+
+  return h('div.series-pick__neutral-box', [
+    h('div.series-pick__neutral-header', 'Neutral'),
+    h('div.series-pick__neutral-openings', [renderRandomSelectingOpening(ctrl, neutral)]),
   ]);
 }
 

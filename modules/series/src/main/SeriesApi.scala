@@ -115,7 +115,9 @@ final class SeriesApi(
             else
               val confirmed = s.updatePlayer(idx, _.confirmBans)
               if confirmed.bothBansConfirmed then
-                startGame1(confirmed)
+                // 중립 오프닝(Standard Game) 추가
+                val withNeutral = confirmed.addNeutralOpening
+                startGame1(withNeutral)
               else
                 repo.update(confirmed).inject(Some(confirmed))
 

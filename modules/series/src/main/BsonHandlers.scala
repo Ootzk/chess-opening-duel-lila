@@ -32,9 +32,11 @@ object BsonHandlers:
   // OpeningSource
   given BSONHandler[OpeningSource] = quickHandler[OpeningSource](
     { case BSONString("pick") => OpeningSource.Pick
+      case BSONString("neutral") => OpeningSource.Neutral
       case _ => OpeningSource.Ban },
     { case OpeningSource.Pick => BSONString("pick")
-      case OpeningSource.Ban => BSONString("ban") }
+      case OpeningSource.Ban => BSONString("ban")
+      case OpeningSource.Neutral => BSONString("neutral") }
   )
 
   // SelectionMethod

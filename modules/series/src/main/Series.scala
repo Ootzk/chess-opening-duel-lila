@@ -75,13 +75,21 @@ case class Series(
     val bannedNames = bannedByOpponent.map(_.name).toSet
     myPicks.filterNot(p => bannedNames.contains(p.name) || p.isUsed)
 
+  /** 랜덤 선택 풀: 밴 + 중립 오프닝 중 미사용 */
   def unusedBans: List[SeriesOpening] =
-    openings.filter(o => o.isBan && !o.isUsed)
+    openings.filter(o => (o.isBan || o.isNeutral) && !o.isUsed)
 
+  /** 전체 랜덤 선택 풀: 밴 + 중립 오프닝 */
   def allBans: List[SeriesOpening] =
-    openings.filter(_.isBan)
+    openings.filter(o => o.isBan || o.isNeutral)
 
-  def bannedOpenings: List[SeriesOpening] = allBans
+  def bannedOpenings: List[SeriesOpening] = openings.filter(_.isBan)
+
+  def neutralOpening: Option[SeriesOpening] = openings.find(_.isNeutral)
+
+  def addNeutralOpening: Series =
+    if neutralOpening.isDefined then this
+    else copy(openings = openings :+ SeriesOpening.makeNeutral())
 
   // ===== 게임 색상 배정 =====
 
