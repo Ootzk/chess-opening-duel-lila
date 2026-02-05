@@ -94,7 +94,6 @@ function renderNeutralBox(ctrl: SeriesPickCtrl, neutral: SeriesOpening): VNode {
   if (!isVisible) {
     return h('div.series-pick__neutral-box.used', [
       h('div.series-pick__neutral-header', 'Neutral'),
-      h('div.series-pick__neutral-empty', 'Used'),
     ]);
   }
 
