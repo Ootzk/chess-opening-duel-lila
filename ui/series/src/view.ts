@@ -76,11 +76,14 @@ function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpen
 
 function renderRandomSelectingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
   const isHighlighted = ctrl.selectedOpening?.id === opening.id;
+  // Mark as used if already used in a previous round (but not if it's the highlighted one)
+  const usedOpenings = ctrl.series.openings.filter(o => o.usedInRound !== undefined && o.usedInRound !== null).map(o => o.name);
+  const isUsed = usedOpenings.includes(opening.name) && !isHighlighted;
 
   return h(
     'div.series-pick__opening',
     {
-      class: { highlighted: isHighlighted },
+      class: { highlighted: isHighlighted, used: isUsed },
       attrs: { 'data-name': opening.name, 'data-fen': opening.fen },
     },
     [

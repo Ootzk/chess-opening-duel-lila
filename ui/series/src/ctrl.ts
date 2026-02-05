@@ -15,7 +15,7 @@ export default class SeriesPickCtrl {
 
   // RandomSelecting phase state
   selectedOpening: SeriesOpening | null = null;
-  randomSelectingCountdown: number = 3;
+  randomSelectingCountdown: number = 5;
   gameId: string | null = null;
 
   constructor(
@@ -29,11 +29,16 @@ export default class SeriesPickCtrl {
 
     // Use server-calculated timeLeft to prevent refresh abuse
     this.timeLeft = config.series.timeLeft ?? 30;
+    this.randomSelectingCountdown = config.series.timeLeft ?? 5;
 
     // Initialize selections and confirmed state from series data
     this.initFromSeries();
 
-    // Handle different phases
+    // NOTE: Don't start timers here - call init() after vnode is set up
+  }
+
+  // Call this after vnode initialization in series.pick.ts
+  init(): void {
     if (this.isRandomSelecting) {
       this.startRandomSelecting();
     } else if (this.isSelecting && this.isWaitingForOpponentSelect) {
@@ -443,37 +448,46 @@ export default class SeriesPickCtrl {
     if (currentGame) {
       this.selectedOpening = this.series.openings.find(o => o.id === currentGame.openingId) ?? null;
     }
-    this.startRandomSelectingCountdown();
+
+    // Always redraw first to show the UI
     this.redraw();
+
+    // If already expired, redirect after a brief delay to ensure UI is visible
+    if (this.randomSelectingCountdown <= 0) {
+      this.randomSelectingCountdown = 0;
+      setTimeout(() => this.startGame(), 100);
+      return;
+    }
+
+    this.startRandomSelectingCountdown();
   }
 
   private startRandomSelectingCountdown(): void {
     this.timerInterval = window.setInterval(() => {
-      if (this.randomSelectingCountdown > 0) {
-        this.randomSelectingCountdown--;
-        this.redraw();
-      } else {
+      this.randomSelectingCountdown--;
+      if (this.randomSelectingCountdown <= 0) {
         if (this.timerInterval) {
           clearInterval(this.timerInterval);
         }
+        this.randomSelectingCountdown = 0; // Prevent negative display
+        this.redraw();
         this.startGame();
+      } else {
+        this.redraw();
       }
     }, 1000);
   }
 
-  private async startGame(): Promise<void> {
-    try {
-      const response = await fetch(`/series/${this.seriesId}/nextGame`, {
-        method: 'POST',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.redirect) {
-          window.location.href = data.redirect;
-        }
-      }
-    } catch (e) {
-      console.error('Error starting game:', e);
+  private startGame(): void {
+    // Game is already created during confirmBans, just redirect
+    const gameId = this.series.currentGame;
+    const povColor = this.series.povIndex === 0 ? 'white' : 'black';
+    if (gameId) {
+      window.location.href = `/${gameId}/${povColor}`;
+    } else {
+      // Fallback: poll until game is ready
+      console.warn('[series] No gameId yet, starting poll...');
+      this.startPolling();
     }
   }
 }

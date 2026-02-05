@@ -63,7 +63,7 @@ final class SeriesUi(helpers: Helpers):
 
   private def pageModule(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset])(using Context) =
     PageModule(
-      "series.pick",
+      "series.timeoutPhase",
       Json.obj(
         "seriesId" -> s.id.value,
         "phase" -> s.phase.id,
@@ -77,65 +77,17 @@ final class SeriesUi(helpers: Helpers):
       )
     ).some
 
+  // RandomSelecting phase - uses same series.timeoutPhase module as Pick/Ban
+  // Snabbdom will replace the body content with view.ts renderRandomSelecting()
   def randomSelecting(s: Series, seriesJson: JsObject)(using Context): Page =
     val gameNum = s.currentRound
-    // Get the actual selected opening from the current game
-    val selectedOpening = s.currentGame.flatMap(g => s.openings.find(_.id == g.openingId))
     Page(s"Opening Duel - Game $gameNum Starting")
       .css("series.pick")
-      .js(randomSelectingModule(s, seriesJson))
+      .js(pageModule(s, seriesJson, Vector.empty))
       .csp(_.withWebAssembly)
       .flag(_.zoom)
       .body(
-        main(cls := "series-pick random-selecting")(
-          div(cls := "series-pick__header")(
-            h1(s"Game $gameNum Starting..."),
-            div(cls := "series-pick__countdown")(s.timeLeftInPhase.toString)
-          ),
-          div(cls := "series-pick__random-selecting-boxes")(
-            renderBanBox(s, 0, selectedOpening),
-            renderBanBox(s, 1, selectedOpening)
-          )
+        main(cls := "series-pick")(
+          div("Loading...")
         )
       )
-
-  private def renderBanBox(s: Series, playerIndex: Int, selectedOpening: Option[SeriesOpening]) =
-    val bans = s.bans(playerIndex)
-    val usedOpenings = s.openings.filter(_.isUsed).map(_.name).toSet
-    val playerName = s.player(playerIndex).userId.value
-    div(cls := "series-pick__ban-box")(
-      div(cls := "series-pick__ban-header")(s"$playerName's Bans"),
-      div(cls := "series-pick__ban-openings")(
-        bans.map: opening =>
-          val isHighlighted = selectedOpening.exists(_.id == opening.id)
-          val isUsed = usedOpenings.contains(opening.name) && !isHighlighted
-          val boardFen = opening.fen.value.split(" ").headOption.getOrElse("")
-          val openingCls = List(
-            "series-pick__opening",
-            if isHighlighted then "highlighted" else "",
-            if isUsed then "used" else ""
-          ).filter(_.nonEmpty).mkString(" ")
-          div(
-            cls := openingCls,
-            attr("data-name") := opening.name,
-            attr("data-fen") := opening.fen.value
-          )(
-            div(cls := "series-pick__board mini-board mini-board--init cg-wrap is2d",
-                attr("data-state") := s"$boardFen,white,"
-            )(cgWrapContent),
-            div(cls := "series-pick__name")(
-              span(cls := "opening-name")(opening.name)
-            )
-          )
-      )
-    )
-
-  private def randomSelectingModule(s: Series, seriesJson: JsObject)(using Context) =
-    PageModule(
-      "series.randomSelecting",
-      Json.obj(
-        "seriesId" -> s.id.value,
-        "phase" -> s.phase.id,
-        "series" -> seriesJson
-      )
-    ).some

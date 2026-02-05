@@ -26,6 +26,9 @@ export function initModule(config: PickConfig): void {
 
   menuHover();
 
+  // Start timers after vnode is initialized (prevents "vnode not initialized" error)
+  ctrl.init();
+
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => ctrl.destroy());
 }
