@@ -480,9 +480,9 @@ export default class SeriesPickCtrl {
   get canConfirm(): boolean {
     if (this.myConfirmed) return false;
     if (this.isPicking) {
-      return this.selectedPicks.size > 0;
+      return this.selectedPicks.size === this.maxPicks; // 정확히 5개
     } else if (this.isBanning) {
-      return this.selectedBans.size > 0;
+      return this.selectedBans.size === this.maxBans; // 정확히 2개
     } else if (this.isSelecting) {
       // Only the loser can confirm in Selecting phase
       return this.isMyTurnToSelect && this.currentSelections.size === 1;
