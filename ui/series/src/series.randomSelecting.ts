@@ -8,36 +8,40 @@ interface RandomSelectingConfig {
     openings: { name: string; fen: string; url: string }[];
     povColor?: 'white' | 'black';
     currentGame?: string;
+    timeLeft?: number;
   };
 }
 
 export function initModule(config: RandomSelectingConfig): void {
-  let countdown = 3;
+  // Use server-provided timeLeft to prevent refresh abuse
+  let countdown = config.series.timeLeft ?? 5;
   const countdownEl = document.querySelector('.series-pick__countdown');
   const gameId = config.series.currentGame;
   const povColor = config.series.povColor || 'white';
 
-  console.log('[randomSelecting] init, povColor:', povColor, 'currentGame:', gameId);
+  // Update display immediately with server value (minimum 0)
+  if (countdownEl) countdownEl.textContent = String(Math.max(0, countdown));
 
   // Initialize mini boards
   requestAnimationFrame(() => initMiniBoards());
 
   menuHover();
 
+  // If already expired, redirect immediately
+  if (countdown <= 0) {
+    if (gameId) window.location.href = `/${gameId}/${povColor}`;
+    return;
+  }
+
   // Start countdown
   const interval = setInterval(() => {
     countdown--;
-    if (countdownEl) countdownEl.textContent = String(countdown);
-
     if (countdown <= 0) {
       clearInterval(interval);
-      // Game is already created in confirmBans, just redirect
-      if (gameId) {
-        console.log('[randomSelecting] Redirecting to game:', gameId);
-        window.location.href = `/${gameId}/${povColor}`;
-      } else {
-        console.error('[randomSelecting] No game ID found!');
-      }
+      if (countdownEl) countdownEl.textContent = '0';
+      if (gameId) window.location.href = `/${gameId}/${povColor}`;
+    } else {
+      if (countdownEl) countdownEl.textContent = String(countdown);
     }
   }, 1000);
 }

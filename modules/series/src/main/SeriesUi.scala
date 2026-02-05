@@ -90,7 +90,7 @@ final class SeriesUi(helpers: Helpers):
         main(cls := "series-pick random-selecting")(
           div(cls := "series-pick__header")(
             h1(s"Game $gameNum Starting..."),
-            div(cls := "series-pick__countdown")("3")
+            div(cls := "series-pick__countdown")(s.timeLeftInPhase.toString)
           ),
           div(cls := "series-pick__random-selecting-boxes")(
             renderBanBox(s, 0, selectedOpening),

@@ -184,11 +184,14 @@ case class Series(
     copy(phase = newPhase, phaseStartedAt = Some(nowInstant))
 
   def timeLeftInPhase: Int =
+    val timeout = phase match
+      case Series.Phase.RandomSelecting => Series.randomSelectingTimeout
+      case _ => Series.phaseTimeout
     phaseStartedAt match
-      case None => Series.phaseTimeout
+      case None => timeout
       case Some(startedAt) =>
         val elapsed = java.time.Duration.between(startedAt, nowInstant).getSeconds.toInt
-        math.max(0, Series.phaseTimeout - elapsed)
+        math.max(0, timeout - elapsed)
 
   def bothPicksConfirmed: Boolean =
     players._1.confirmedPicks && players._2.confirmedPicks
@@ -202,6 +205,7 @@ object Series:
   val maxPicks = 5
   val maxBans = 2
   val phaseTimeout = 30 // seconds
+  val randomSelectingTimeout = 5 // seconds
 
   enum Status(val id: Int):
     case Created extends Status(10)
