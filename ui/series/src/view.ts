@@ -68,22 +68,27 @@ function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
 }
 
 function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpening[]): VNode {
+  // Filter out already used openings (except the currently highlighted one)
+  const usedOpeningNames = ctrl.series.openings
+    .filter(o => o.usedInRound !== undefined && o.usedInRound !== null)
+    .map(o => o.name);
+  const visibleBans = bans.filter(
+    b => !usedOpeningNames.includes(b.name) || ctrl.selectedOpening?.id === b.id,
+  );
+
   return h('div.series-pick__ban-box', [
     h('div.series-pick__ban-header', `${playerName}'s Bans`),
-    h('div.series-pick__ban-openings', bans.map(opening => renderRandomSelectingOpening(ctrl, opening))),
+    h('div.series-pick__ban-openings', visibleBans.map(opening => renderRandomSelectingOpening(ctrl, opening))),
   ]);
 }
 
 function renderRandomSelectingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
   const isHighlighted = ctrl.selectedOpening?.id === opening.id;
-  // Mark as used if already used in a previous round (but not if it's the highlighted one)
-  const usedOpenings = ctrl.series.openings.filter(o => o.usedInRound !== undefined && o.usedInRound !== null).map(o => o.name);
-  const isUsed = usedOpenings.includes(opening.name) && !isHighlighted;
 
   return h(
     'div.series-pick__opening',
     {
-      class: { highlighted: isHighlighted, used: isUsed },
+      class: { highlighted: isHighlighted },
       attrs: { 'data-name': opening.name, 'data-fen': opening.fen },
     },
     [
