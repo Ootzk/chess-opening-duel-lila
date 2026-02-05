@@ -210,10 +210,11 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
   const rightSide: VNode[] = [];
 
   // Left side: Confirm or Cancel button
+  const buttonClass = ctrl.isBanning ? 'button.button.button-red' : 'button.button.button-green';
   if (ctrl.isWaiting) {
     leftSide.push(
       h(
-        'button.button.button-red',
+        'button.button.button-metal.series-pick__action-btn',
         {
           on: {
             click: () => ctrl.cancelConfirm(),
@@ -225,7 +226,7 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
   } else {
     leftSide.push(
       h(
-        'button.button.button-green',
+        `${buttonClass}.series-pick__action-btn`,
         {
           attrs: {
             disabled: !ctrl.canConfirm,

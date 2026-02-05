@@ -343,6 +343,12 @@
   align-items: center;
 }
 
+// Fixed width action button
+.series-pick__action-btn {
+  min-width: 160px;
+  text-align: center;
+}
+
 // Opponent status display
 .series-pick__opponent-status {
   display: flex;

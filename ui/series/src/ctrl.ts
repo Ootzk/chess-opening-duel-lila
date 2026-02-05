@@ -490,7 +490,7 @@ export default class SeriesPickCtrl {
     if (this.isPicking) {
       return `Confirm (${count}/${max})`;
     } else if (this.isBanning) {
-      return `Confirm Bans (${count}/${max})`;
+      return `Confirm (${count}/${max})`;
     } else if (this.isSelecting) {
       return count > 0 ? 'Select Opening' : 'Select an Opening';
     }
