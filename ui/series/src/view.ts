@@ -68,13 +68,14 @@ function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
 }
 
 function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpening[]): VNode {
-  // Filter out already used openings (except the currently highlighted one)
-  const usedOpeningNames = ctrl.series.openings
-    .filter(o => o.usedInRound !== undefined && o.usedInRound !== null)
-    .map(o => o.name);
-  const visibleBans = bans.filter(
-    b => !usedOpeningNames.includes(b.name) || ctrl.selectedOpening?.id === b.id,
-  );
+  // Filter out THIS specific opening if it was used in a PREVIOUS round
+  // (Check the opening's own usedInRound, not by name lookup)
+  const currentRound = Number(ctrl.series.round);
+  const visibleBans = bans.filter(b => {
+    const usedIn = b.usedInRound;
+    if (usedIn === undefined || usedIn === null) return true; // Not used yet
+    return Number(usedIn) >= currentRound; // Show if used in current round or later
+  });
 
   return h('div.series-pick__ban-box', [
     h('div.series-pick__ban-header', `${playerName}'s Bans`),
@@ -83,7 +84,9 @@ function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpen
 }
 
 function renderRandomSelectingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
-  const isHighlighted = ctrl.selectedOpening?.id === opening.id;
+  // Highlight the opening selected for current round (use Number() for type safety)
+  const currentRound = Number(ctrl.series.round);
+  const isHighlighted = Number(opening.usedInRound) === currentRound;
 
   return h(
     'div.series-pick__opening',
