@@ -75,7 +75,7 @@ function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpen
 }
 
 function renderRandomSelectingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
-  const isHighlighted = ctrl.selectedOpening?.name === opening.name;
+  const isHighlighted = ctrl.selectedOpening?.id === opening.id;
 
   return h(
     'div.series-pick__opening',

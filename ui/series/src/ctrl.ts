@@ -438,10 +438,10 @@ export default class SeriesPickCtrl {
 
   // RandomSelecting phase methods
   private startRandomSelecting(): void {
-    // Get first ban opening from openings list
-    const bans = getAllBans(this.series);
-    if (bans.length > 0) {
-      this.selectedOpening = bans[0];
+    // Get the actual selected opening from the current game
+    const currentGame = this.series.games.find(g => g.gameId === this.series.currentGame);
+    if (currentGame) {
+      this.selectedOpening = this.series.openings.find(o => o.id === currentGame.openingId) ?? null;
     }
     this.startRandomSelectingCountdown();
     this.redraw();

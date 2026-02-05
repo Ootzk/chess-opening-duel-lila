@@ -79,7 +79,8 @@ final class SeriesUi(helpers: Helpers):
 
   def randomSelecting(s: Series, seriesJson: JsObject)(using Context): Page =
     val gameNum = s.currentRound
-    val selectedOpening = s.openings.lastOption
+    // Get the actual selected opening from the current game
+    val selectedOpening = s.currentGame.flatMap(g => s.openings.find(_.id == g.openingId))
     Page(s"Opening Duel - Game $gameNum Starting")
       .css("series.pick")
       .js(randomSelectingModule(s, seriesJson))
@@ -106,7 +107,7 @@ final class SeriesUi(helpers: Helpers):
       div(cls := "series-pick__ban-header")(s"$playerName's Bans"),
       div(cls := "series-pick__ban-openings")(
         bans.map: opening =>
-          val isHighlighted = selectedOpening.exists(_.name == opening.name)
+          val isHighlighted = selectedOpening.exists(_.id == opening.id)
           val isUsed = usedOpenings.contains(opening.name) && !isHighlighted
           val boardFen = opening.fen.value.split(" ").headOption.getOrElse("")
           val openingCls = List(
