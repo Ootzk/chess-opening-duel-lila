@@ -186,7 +186,11 @@ final class SeriesApi(
 
     if unusedBans.isEmpty then
       // 밴 오프닝이 모두 소진되면 시리즈 종료 (무승부 처리)
-      val finished = s.setPhase(Series.Phase.Finished)
+      val finished = s.copy(
+        phase = Series.Phase.Finished,
+        status = Series.Status.Finished,
+        finishedAt = Some(nowInstant)
+      )
       repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
     else
       val selected = scala.util.Random.shuffle(unusedBans).head
