@@ -206,17 +206,12 @@ function renderFooter(ctrl: SeriesPickCtrl): VNode {
 }
 
 function renderActions(ctrl: SeriesPickCtrl): VNode {
-  const buttons: VNode[] = [];
+  const leftSide: VNode[] = [];
+  const rightSide: VNode[] = [];
 
+  // Left side: Confirm or Cancel button
   if (ctrl.isWaiting) {
-    // Waiting for opponent - show waiting message and cancel button
-    buttons.push(
-      h('div.series-pick__waiting', [
-        h('span.ddloader'),
-        h('span', 'Waiting for opponent...'),
-      ]),
-    );
-    buttons.push(
+    leftSide.push(
       h(
         'button.button.button-red',
         {
@@ -228,8 +223,7 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
       ),
     );
   } else {
-    // Normal confirm button
-    buttons.push(
+    leftSide.push(
       h(
         'button.button.button-green',
         {
@@ -245,10 +239,27 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
     );
   }
 
-  // Show opponent status
-  if (ctrl.opponentConfirmed && !ctrl.myConfirmed) {
-    buttons.push(h('div.series-pick__opponent-ready', 'Opponent is ready!'));
+  // Right side: Opponent status (only in pick/ban phases)
+  if (ctrl.isPicking || ctrl.isBanning) {
+    if (ctrl.opponentConfirmed) {
+      rightSide.push(
+        h('div.series-pick__opponent-status.ready', [
+          h('span', 'Your opponent is '),
+          h('span.status-text', 'Ready!'),
+        ]),
+      );
+    } else {
+      rightSide.push(
+        h('div.series-pick__opponent-status.waiting', [
+          h('span', 'Your opponent is '),
+          h('span.ddloader'),
+        ]),
+      );
+    }
   }
 
-  return h('div.series-pick__actions', buttons);
+  return h('div.series-pick__actions', [
+    h('div.series-pick__actions-left', leftSide),
+    h('div.series-pick__actions-right', rightSide),
+  ]);
 }

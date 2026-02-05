@@ -67,12 +67,11 @@ final class Series(env: Env) extends LilaController(env):
         yield page
   }
 
-  def apiShow(id: SeriesId) = AnonOrScoped() { ctx ?=>
+  def apiShow(id: SeriesId) = Open:
     Found(api.byId(id)): s =>
       for
         json <- env.series.jsonView(s, ctx.me.map(_.userId))
       yield JsonOk(json)
-  }
 
   def nextGame(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>

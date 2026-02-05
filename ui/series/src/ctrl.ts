@@ -52,6 +52,10 @@ export default class SeriesPickCtrl {
         this.onTimeout();
       } else {
         this.startTimer();
+        // Start polling for opponent status updates (pick/ban phases)
+        if (this.isPicking || this.isBanning) {
+          this.startPolling();
+        }
       }
     }
   }
@@ -392,7 +396,7 @@ export default class SeriesPickCtrl {
 
   private startPolling(): void {
     if (this.pollingInterval) return;
-    this.pollingInterval = window.setInterval(() => this.pollState(), 100);
+    this.pollingInterval = window.setInterval(() => this.pollState(), 1000);
   }
 
   private stopPolling(): void {
@@ -418,13 +422,29 @@ export default class SeriesPickCtrl {
             return;
           } else if (newPhase === PhaseId.Playing && data.currentGame) {
             // Playing 상태이고 현재 게임이 있으면 게임으로 직접 이동
-            console.log('[series] Poll: Redirecting to game:', data.currentGame);
             window.location.href = `/${data.currentGame}`;
             return;
           } else {
-            console.log('[series] Poll: Reloading page for phase:', newPhase);
             window.location.reload();
             return;
+          }
+        }
+
+        // Update opponent confirmed status
+        const povIndex = data.povIndex;
+        if (povIndex !== undefined && data.players) {
+          const oppIndex = 1 - povIndex;
+          const oppPlayer = data.players[oppIndex];
+          if (oppPlayer) {
+            const oppConfirmed = this.isPicking
+              ? oppPlayer.confirmedPicks
+              : this.isBanning
+                ? oppPlayer.confirmedBans
+                : false;
+            if (oppConfirmed !== this.opponentConfirmed) {
+              this.opponentConfirmed = oppConfirmed;
+              this.redraw();
+            }
           }
         }
       }

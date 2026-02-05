@@ -324,3 +324,44 @@
   font-style: italic;
   padding: 1rem;
 }
+
+// Actions layout (left: buttons, right: opponent status)
+.series-pick__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.series-pick__actions-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.series-pick__actions-right {
+  display: flex;
+  align-items: center;
+}
+
+// Opponent status display
+.series-pick__opponent-status {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  color: $c-font-dim;
+
+  &.ready {
+    .status-text {
+      color: $c-good;
+      font-weight: bold;
+    }
+  }
+
+  &.waiting {
+    .ddloader {
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
