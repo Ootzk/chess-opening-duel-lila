@@ -23,8 +23,8 @@ final class Series(env: Env) extends LilaController(env):
   def pickPage(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>
       if !isPlayer(s, me.userId) then Forbidden("Not a player of this series")
-      else if s.phase == lila.series.Series.Phase.Shuffling then
-        Redirect(routes.Series.shufflingPage(id))
+      else if s.phase == lila.series.Series.Phase.RandomSelecting then
+        Redirect(routes.Series.randomSelectingPage(id))
       else if s.phase == lila.series.Series.Phase.Playing then
         // Playing 중이면 현재 게임으로 리다이렉트
         s.currentGameId match
@@ -54,16 +54,16 @@ final class Series(env: Env) extends LilaController(env):
         yield page
   }
 
-  // Game1 셔플링 페이지 (HTML)
-  def shufflingPage(id: SeriesId) = Auth { ctx ?=> me ?=>
+  // RandomSelecting 페이지 (HTML)
+  def randomSelectingPage(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>
       if !isPlayer(s, me.userId) then Forbidden("Not a player of this series")
-      else if s.phase != lila.series.Series.Phase.Shuffling then
+      else if s.phase != lila.series.Series.Phase.RandomSelecting then
         Redirect(routes.Series.pickPage(id))
       else
         for
           json <- env.series.jsonView(s, Some(me.userId))
-          page <- Ok.page(views.series.shuffling(s, json))
+          page <- Ok.page(views.series.randomSelecting(s, json))
         yield page
   }
 

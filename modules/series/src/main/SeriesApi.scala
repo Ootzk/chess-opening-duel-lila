@@ -141,15 +141,15 @@ final class SeriesApi(
       val selected = scala.util.Random.shuffle(allBans).head
       val round = 1
       val withOpening = s.markOpeningUsed(selected.id, round, SelectionMethod.SystemRandom)
-      val inShuffling = withOpening.setPhase(Series.Phase.Shuffling)
+      val inRandomSelecting = withOpening.setPhase(Series.Phase.RandomSelecting)
 
       for
-        game <- createGame(inShuffling, round, selected)
-        withGame = inShuffling.addGame(SeriesGame(
+        game <- createGame(inRandomSelecting, round, selected)
+        withGame = inRandomSelecting.addGame(SeriesGame(
           gameId = game.id,
           round = round,
           openingId = selected.id,
-          whitePlayerIndex = inShuffling.whitePlayerIndex(round)
+          whitePlayerIndex = inRandomSelecting.whitePlayerIndex(round)
         ))
         _ <- repo.update(withGame)
         _ <- onStart.exec(game.id)
@@ -202,10 +202,10 @@ final class SeriesApi(
             openingId = selected.id,
             whitePlayerIndex = withOpening.whitePlayerIndex(round)
           ))
-          .setPhase(Series.Phase.Shuffling)
+          .setPhase(Series.Phase.RandomSelecting)
         _ <- repo.update(withGame)
         _ <- onStart.exec(game.id)
-        _ = Bus.pub(SeriesDrawShuffling(withGame, oldGameId))
+        _ = Bus.pub(SeriesDrawRandomSelecting(withGame, oldGameId))
       yield ()
 
   // ===== 패자가 오프닝 선택 =====
@@ -367,4 +367,4 @@ final class SeriesApi(
 case class SeriesFinished(s: Series)
 case class SeriesGameFinished(s: Series, gameId: GameId, winnerId: Option[UserId])
 case class SeriesEnterSelecting(s: Series, oldGameId: GameId)
-case class SeriesDrawShuffling(s: Series, oldGameId: GameId)
+case class SeriesDrawRandomSelecting(s: Series, oldGameId: GameId)

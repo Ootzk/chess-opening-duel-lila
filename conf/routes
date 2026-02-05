@@ -470,7 +470,7 @@ GET   /$lang<\w\w\w?>/swiss                   controllers.Swiss.homeLang(lang: L
 # Series (Best of 5)
 GET   /series/$id<\w{8}>                      controllers.Series.show(id: SeriesId)
 GET   /series/$id<\w{8}>/pick                 controllers.Series.pickPage(id: SeriesId)
-GET   /series/$id<\w{8}>/shuffling           controllers.Series.shufflingPage(id: SeriesId)
+GET   /series/$id<\w{8}>/random-selecting    controllers.Series.randomSelectingPage(id: SeriesId)
 GET   /api/series/$id<\w{8}>                  controllers.Series.apiShow(id: SeriesId)
 POST  /series/$id<\w{8}>/next                 controllers.Series.nextGame(id: SeriesId)
 # Series Ban/Pick API

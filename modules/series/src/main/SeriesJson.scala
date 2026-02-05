@@ -95,7 +95,7 @@ final class SeriesJson(
   private def phaseName(phase: Series.Phase): String = phase match
     case Series.Phase.Picking => "Pick Phase"
     case Series.Phase.Banning => "Ban Phase"
-    case Series.Phase.Shuffling => "Starting..."
+    case Series.Phase.RandomSelecting => "Starting..."
     case Series.Phase.Playing => "Playing"
     case Series.Phase.Selecting => "Select Opening"
     case Series.Phase.Finished => "Finished"

@@ -5,8 +5,8 @@ import type { OpeningPreset, SeriesOpening } from './interfaces';
 import { getOpponentBans, getMyBans } from './interfaces';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
-  if (ctrl.isShuffling) {
-    return renderShuffling(ctrl);
+  if (ctrl.isRandomSelecting) {
+    return renderRandomSelecting(ctrl);
   }
   // Selecting phase: 승자는 대기 화면, 패자는 선택 화면
   if (ctrl.isSelecting && ctrl.isWaitingForOpponentSelect) {
@@ -44,7 +44,7 @@ function renderWaitingForOpponentSelect(ctrl: SeriesPickCtrl): VNode {
   ]);
 }
 
-function renderShuffling(ctrl: SeriesPickCtrl): VNode {
+function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
   const povIndex = ctrl.series.povIndex ?? 0;
   const oppIndex = 1 - povIndex;
 
@@ -55,12 +55,12 @@ function renderShuffling(ctrl: SeriesPickCtrl): VNode {
   const oppName = ctrl.series.players[oppIndex].user?.name || `Player ${oppIndex + 1}`;
   const gameNum = ctrl.series.round;
 
-  return h('div.series-pick.shuffling', [
+  return h('div.series-pick.random-selecting', [
     h('div.series-pick__header', [
       h('h1', `Game ${gameNum} Starting...`),
-      h('div.series-pick__countdown', String(ctrl.shufflingCountdown)),
+      h('div.series-pick__countdown', String(ctrl.randomSelectingCountdown)),
     ]),
-    h('div.series-pick__shuffling-boxes', [
+    h('div.series-pick__random-selecting-boxes', [
       renderBanBox(ctrl, myName, myBans),
       renderBanBox(ctrl, oppName, oppBans),
     ]),
@@ -70,11 +70,11 @@ function renderShuffling(ctrl: SeriesPickCtrl): VNode {
 function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpening[]): VNode {
   return h('div.series-pick__ban-box', [
     h('div.series-pick__ban-header', `${playerName}'s Bans`),
-    h('div.series-pick__ban-openings', bans.map(opening => renderShufflingOpening(ctrl, opening))),
+    h('div.series-pick__ban-openings', bans.map(opening => renderRandomSelectingOpening(ctrl, opening))),
   ]);
 }
 
-function renderShufflingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
+function renderRandomSelectingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
   const isHighlighted = ctrl.selectedOpening?.name === opening.name;
 
   return h(

@@ -1,7 +1,7 @@
 import { initMiniBoards } from 'lib/view/miniBoard';
 import menuHover from 'lib/menuHover';
 
-interface ShufflingConfig {
+interface RandomSelectingConfig {
   seriesId: string;
   phase: number;
   series: {
@@ -11,13 +11,13 @@ interface ShufflingConfig {
   };
 }
 
-export function initModule(config: ShufflingConfig): void {
+export function initModule(config: RandomSelectingConfig): void {
   let countdown = 3;
   const countdownEl = document.querySelector('.series-pick__countdown');
   const gameId = config.series.currentGame;
   const povColor = config.series.povColor || 'white';
 
-  console.log('[shuffling] init, povColor:', povColor, 'currentGame:', gameId);
+  console.log('[randomSelecting] init, povColor:', povColor, 'currentGame:', gameId);
 
   // Initialize mini boards
   requestAnimationFrame(() => initMiniBoards());
@@ -33,10 +33,10 @@ export function initModule(config: ShufflingConfig): void {
       clearInterval(interval);
       // Game is already created in confirmBans, just redirect
       if (gameId) {
-        console.log('[shuffling] Redirecting to game:', gameId);
+        console.log('[randomSelecting] Redirecting to game:', gameId);
         window.location.href = `/${gameId}/${povColor}`;
       } else {
-        console.error('[shuffling] No game ID found!');
+        console.error('[randomSelecting] No game ID found!');
       }
     }
   }, 1000);

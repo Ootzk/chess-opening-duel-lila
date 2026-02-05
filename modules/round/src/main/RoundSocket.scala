@@ -196,8 +196,8 @@ final class RoundSocket(
   Bus.sub[lila.game.actorApi.NotifySeriesSelecting]: selecting =>
     rounds.tellIfPresent(selecting.oldGameId, selecting)
 
-  Bus.sub[lila.game.actorApi.NotifySeriesShuffling]: shuffling =>
-    rounds.tellIfPresent(shuffling.oldGameId, shuffling)
+  Bus.sub[lila.game.actorApi.NotifySeriesRandomSelecting]: randomSelecting =>
+    rounds.tellIfPresent(randomSelecting.oldGameId, randomSelecting)
 
   Bus.sub[FishnetStart.type](rounds.tellAll(_))
   Bus.sub[TellMany]:

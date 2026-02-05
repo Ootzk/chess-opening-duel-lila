@@ -14,7 +14,7 @@ final class SeriesUi(helpers: Helpers):
     val phaseName = s.phase match
       case Series.Phase.Picking => "Pick Phase"
       case Series.Phase.Banning => "Ban Phase"
-      case Series.Phase.Shuffling => "Game Starting"
+      case Series.Phase.RandomSelecting => "Game Starting"
       case Series.Phase.Selecting => "Select Opening"
       case _ => "Opening Duel"
 
@@ -77,21 +77,21 @@ final class SeriesUi(helpers: Helpers):
       )
     ).some
 
-  def shuffling(s: Series, seriesJson: JsObject)(using Context): Page =
+  def randomSelecting(s: Series, seriesJson: JsObject)(using Context): Page =
     val gameNum = s.currentRound
     val selectedOpening = s.openings.lastOption
     Page(s"Opening Duel - Game $gameNum Starting")
       .css("series.pick")
-      .js(shufflingModule(s, seriesJson))
+      .js(randomSelectingModule(s, seriesJson))
       .csp(_.withWebAssembly)
       .flag(_.zoom)
       .body(
-        main(cls := "series-pick shuffling")(
+        main(cls := "series-pick random-selecting")(
           div(cls := "series-pick__header")(
             h1(s"Game $gameNum Starting..."),
             div(cls := "series-pick__countdown")("3")
           ),
-          div(cls := "series-pick__shuffling-boxes")(
+          div(cls := "series-pick__random-selecting-boxes")(
             renderBanBox(s, 0, selectedOpening),
             renderBanBox(s, 1, selectedOpening)
           )
@@ -129,9 +129,9 @@ final class SeriesUi(helpers: Helpers):
       )
     )
 
-  private def shufflingModule(s: Series, seriesJson: JsObject)(using Context) =
+  private def randomSelectingModule(s: Series, seriesJson: JsObject)(using Context) =
     PageModule(
-      "series.shuffling",
+      "series.randomSelecting",
       Json.obj(
         "seriesId" -> s.id.value,
         "phase" -> s.phase.id,

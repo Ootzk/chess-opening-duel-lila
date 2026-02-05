@@ -31,4 +31,4 @@ object BoardMoretime:
 
 case class NotifyRematch(rematchOf: GameId, newGame: Game)
 case class NotifySeriesSelecting(seriesId: lila.core.id.SeriesId, oldGameId: GameId)
-case class NotifySeriesShuffling(seriesId: lila.core.id.SeriesId, oldGameId: GameId)
+case class NotifySeriesRandomSelecting(seriesId: lila.core.id.SeriesId, oldGameId: GameId)

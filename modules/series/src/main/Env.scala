@@ -33,7 +33,7 @@ final class Env(
         api.finishGame(seriesId, game.id, game.winnerUserId)
 
   // When a series game finishes but series continues (Game 1 only)
-  // Game 2+ with winner goes to Selecting, Game 2+ draw goes to Shuffling
+  // Game 2+ with winner goes to Selecting, Game 2+ draw goes to RandomSelecting
   Bus.sub[SeriesGameFinished]:
     case SeriesGameFinished(s, oldGameId, _) =>
       api.createNextGame(s.id).foreach:
@@ -46,10 +46,10 @@ final class Env(
     case SeriesEnterSelecting(s, oldGameId) =>
       Bus.pub(lila.game.actorApi.NotifySeriesSelecting(s.id, oldGameId))
 
-  // When draw occurs in Game 2+ - redirect to shuffling page
-  Bus.sub[SeriesDrawShuffling]:
-    case SeriesDrawShuffling(s, oldGameId) =>
-      Bus.pub(lila.game.actorApi.NotifySeriesShuffling(s.id, oldGameId))
+  // When draw occurs in Game 2+ - redirect to random selecting page
+  Bus.sub[SeriesDrawRandomSelecting]:
+    case SeriesDrawRandomSelecting(s, oldGameId) =>
+      Bus.pub(lila.game.actorApi.NotifySeriesRandomSelecting(s.id, oldGameId))
 
   // When series is finished
   Bus.sub[SeriesFinished]:

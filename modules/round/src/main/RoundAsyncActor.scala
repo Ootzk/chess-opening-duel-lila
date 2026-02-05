@@ -304,11 +304,11 @@ final private class RoundAsyncActor(
         publish:
           chess.ByColor(color => Event.SeriesSelectingRedirect(color, seriesId)).toList
 
-    // Series: Shuffling 페이지로 리다이렉트 (Game 2+ 무승부일 때)
-    case lila.game.actorApi.NotifySeriesShuffling(seriesId, _) =>
+    // Series: RandomSelecting 페이지로 리다이렉트 (Game 2+ 무승부일 때)
+    case lila.game.actorApi.NotifySeriesRandomSelecting(seriesId, _) =>
       fuccess:
         publish:
-          chess.ByColor(color => Event.SeriesShufflingRedirect(color, seriesId)).toList
+          chess.ByColor(color => Event.SeriesRandomSelectingRedirect(color, seriesId)).toList
 
     case Moretime(playerId, duration, force) =>
       handle(playerId): pov =>

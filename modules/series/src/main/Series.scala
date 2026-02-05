@@ -214,7 +214,7 @@ object Series:
   enum Phase(val id: Int):
     case Picking extends Phase(10)
     case Banning extends Phase(20)
-    case Shuffling extends Phase(25)
+    case RandomSelecting extends Phase(25)
     case Playing extends Phase(30)
     case Selecting extends Phase(40)
     case Finished extends Phase(50)

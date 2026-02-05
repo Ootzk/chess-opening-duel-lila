@@ -64,7 +64,7 @@ export interface PickConfig {
 export const Phase = {
   Picking: 10,
   Banning: 20,
-  Shuffling: 25, // renamed from Game1Shuffling
+  RandomSelecting: 25,
   Playing: 30,
   Selecting: 40,
   Finished: 50,

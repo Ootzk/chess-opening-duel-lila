@@ -231,8 +231,8 @@ object Event:
     override def only = Some(color)
     override def owner = true
 
-  // Shuffling 페이지로 리다이렉트 (Series: 무승부일 때)
-  case class SeriesShufflingRedirect(color: Color, seriesId: lila.core.id.SeriesId) extends Event:
+  // RandomSelecting 페이지로 리다이렉트 (Series: 무승부일 때)
+  case class SeriesRandomSelectingRedirect(color: Color, seriesId: lila.core.id.SeriesId) extends Event:
     def typ = "redirect"
     def data = Json.obj("url" -> s"/series/$seriesId/pick")
     override def only = Some(color)

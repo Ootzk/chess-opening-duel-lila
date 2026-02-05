@@ -13,9 +13,9 @@ export default class SeriesPickCtrl {
   myConfirmed: boolean = false;
   opponentConfirmed: boolean = false;
 
-  // Shuffling phase state
+  // RandomSelecting phase state
   selectedOpening: SeriesOpening | null = null;
-  shufflingCountdown: number = 3;
+  randomSelectingCountdown: number = 3;
   gameId: string | null = null;
 
   constructor(
@@ -34,8 +34,8 @@ export default class SeriesPickCtrl {
     this.initFromSeries();
 
     // Handle different phases
-    if (this.isShuffling) {
-      this.startShuffling();
+    if (this.isRandomSelecting) {
+      this.startRandomSelecting();
     } else if (this.isSelecting && this.isWaitingForOpponentSelect) {
       // Winner waiting for loser to select - poll for state changes
       this.startTimer();
@@ -130,8 +130,8 @@ export default class SeriesPickCtrl {
     return this.phase === PhaseId.Selecting;
   }
 
-  get isShuffling(): boolean {
-    return this.phase === PhaseId.Shuffling;
+  get isRandomSelecting(): boolean {
+    return this.phase === PhaseId.RandomSelecting;
   }
 
   get isWaiting(): boolean {
@@ -298,13 +298,13 @@ export default class SeriesPickCtrl {
         this.opponentConfirmed = data.opponentConfirmed ?? false;
 
         const newPhase = Number(data.phase);
-        console.log('[series] confirm response:', { newPhase, currentPhase: this.phase, Shuffling: PhaseId.Shuffling });
+        console.log('[series] confirm response:', { newPhase, currentPhase: this.phase, RandomSelecting: PhaseId.RandomSelecting });
 
         // Phase changed, redirect to appropriate page
         if (newPhase !== this.phase) {
-          if (newPhase === PhaseId.Shuffling) {
-            console.log('[series] Redirecting to shuffling page');
-            window.location.href = `/series/${this.seriesId}/shuffling`;
+          if (newPhase === PhaseId.RandomSelecting) {
+            console.log('[series] Redirecting to random-selecting page');
+            window.location.href = `/series/${this.seriesId}/random-selecting`;
             return;
           } else {
             console.log('[series] Reloading page for phase:', newPhase);
@@ -345,11 +345,11 @@ export default class SeriesPickCtrl {
         const newPhase = Number(data.phase);
         // Phase changed, redirect to appropriate page
         if (newPhase !== this.phase) {
-          console.log('[series] poll detected phase change:', { newPhase, currentPhase: this.phase, Shuffling: PhaseId.Shuffling });
+          console.log('[series] poll detected phase change:', { newPhase, currentPhase: this.phase, RandomSelecting: PhaseId.RandomSelecting });
           this.stopPolling();
-          if (newPhase === PhaseId.Shuffling) {
-            console.log('[series] Poll: Redirecting to shuffling page');
-            window.location.href = `/series/${this.seriesId}/shuffling`;
+          if (newPhase === PhaseId.RandomSelecting) {
+            console.log('[series] Poll: Redirecting to random-selecting page');
+            window.location.href = `/series/${this.seriesId}/random-selecting`;
             return;
           } else if (newPhase === PhaseId.Playing && data.currentGame) {
             // Playing 상태이고 현재 게임이 있으면 게임으로 직접 이동
@@ -436,21 +436,21 @@ export default class SeriesPickCtrl {
     this.stopPolling();
   }
 
-  // Shuffling phase methods
-  private startShuffling(): void {
+  // RandomSelecting phase methods
+  private startRandomSelecting(): void {
     // Get first ban opening from openings list
     const bans = getAllBans(this.series);
     if (bans.length > 0) {
       this.selectedOpening = bans[0];
     }
-    this.startShufflingCountdown();
+    this.startRandomSelectingCountdown();
     this.redraw();
   }
 
-  private startShufflingCountdown(): void {
+  private startRandomSelectingCountdown(): void {
     this.timerInterval = window.setInterval(() => {
-      if (this.shufflingCountdown > 0) {
-        this.shufflingCountdown--;
+      if (this.randomSelectingCountdown > 0) {
+        this.randomSelectingCountdown--;
         this.redraw();
       } else {
         if (this.timerInterval) {

@@ -184,8 +184,8 @@
   }
 }
 
-// Game1Shuffling phase styles
-.series-pick.shuffling {
+// RandomSelecting phase styles
+.series-pick.random-selecting {
   .series-pick__header {
     @extend %flex-column;
     text-align: center;
@@ -204,7 +204,7 @@
   }
 }
 
-.series-pick__shuffling-boxes {
+.series-pick__random-selecting-boxes {
   display: flex;
   gap: 2rem;
   justify-content: center;

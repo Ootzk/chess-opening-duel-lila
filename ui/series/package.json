@@ -8,6 +8,6 @@
     "lib": "workspace:*"
   },
   "build": {
-    "bundle": ["src/series.pick.ts", "src/series.shuffling.ts"]
+    "bundle": ["src/series.pick.ts", "src/series.randomSelecting.ts"]
   }
 }
