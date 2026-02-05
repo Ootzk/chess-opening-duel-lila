@@ -59,13 +59,13 @@ final class SeriesJson(
       "id" -> s.id.value,
       "round" -> s.currentRound,
       "bestOf" -> Series.bestOf,
-      "scores" -> Json.arr(s.players._1.score, s.players._2.score)
+      "scores" -> Json.arr(s.players._1.displayScore, s.players._2.displayScore)
     )
 
   private def playerJson(p: SeriesPlayer, user: Option[LightUser]): JsObject =
     Json.obj(
       "index" -> p.index,
-      "score" -> p.score,
+      "score" -> p.displayScore,
       "confirmedPicks" -> p.confirmedPicks,
       "confirmedBans" -> p.confirmedBans
     ).add("user" -> user.map(u => Json.obj("id" -> u.id, "name" -> u.name)))

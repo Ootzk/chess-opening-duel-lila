@@ -39,16 +39,21 @@ case class Series(
 
   // ===== 점수/상태 =====
 
-  def currentRound: Int = games.length + 1
+  // Current round = finished games + 1
+  def currentRound: Int = games.count(_.result.isDefined) + 1
 
   def isCreated: Boolean = status == Series.Status.Created
   def isStarted: Boolean = status == Series.Status.Started
   def isFinished: Boolean = status == Series.Status.Finished
   def isNotFinished: Boolean = !isFinished
 
+  // Winner: must have higher score AND at least pointsNeeded (2.5)
+  // Tie at 2.5-2.5 means sudden death continues
   def winner: Option[Int] =
-    if players._1.score >= Series.winsNeeded then Some(0)
-    else if players._2.score >= Series.winsNeeded then Some(1)
+    val dominated = players._1.score > players._2.score && players._1.score >= Series.pointsNeeded
+    val dominated2 = players._2.score > players._1.score && players._2.score >= Series.pointsNeeded
+    if dominated then Some(0)
+    else if dominated2 then Some(1)
     else None
 
   def hasEnded: Boolean = winner.isDefined
@@ -148,19 +153,25 @@ case class Series(
       if g.gameId == gameId then g.copy(result = Some(result))
       else g
 
-    val winnerIndex = games.find(_.gameId == gameId).flatMap: game =>
-      result match
-        case GameResult.WhiteWins => Some(game.whitePlayerIndex)
-        case GameResult.BlackWins => Some(1 - game.whitePlayerIndex)
-        case GameResult.Draw => None
+    val gameOpt = games.find(_.gameId == gameId)
+    val updatedPlayers = gameOpt match
+      case None => players
+      case Some(game) =>
+        result match
+          case GameResult.WhiteWins =>
+            if game.whitePlayerIndex == 0 then (players._1.addWin, players._2)
+            else (players._1, players._2.addWin)
+          case GameResult.BlackWins =>
+            if game.whitePlayerIndex == 0 then (players._1, players._2.addWin)
+            else (players._1.addWin, players._2)
+          case GameResult.Draw =>
+            (players._1.addDraw, players._2.addDraw)
 
-    val updatedPlayers = winnerIndex match
-      case Some(0) => (players._1.addWin, players._2)
-      case Some(1) => (players._1, players._2.addWin)
-      case _ => players
-
-    val finished = updatedPlayers._1.score >= Series.winsNeeded ||
-                   updatedPlayers._2.score >= Series.winsNeeded
+    // Sudden death: winner needs higher score AND at least pointsNeeded
+    val p1Score = updatedPlayers._1.score
+    val p2Score = updatedPlayers._2.score
+    val finished = (p1Score > p2Score && p1Score >= Series.pointsNeeded) ||
+                   (p2Score > p1Score && p2Score >= Series.pointsNeeded)
 
     copy(
       games = updatedGames,
@@ -187,7 +198,7 @@ case class Series(
 
 object Series:
   val bestOf = 5
-  val winsNeeded = 3
+  val pointsNeeded = 5  // 2.5 * 2 (internal: win=2, draw=1)
   val maxPicks = 5
   val maxBans = 2
   val phaseTimeout = 30 // seconds
