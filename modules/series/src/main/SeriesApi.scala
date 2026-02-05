@@ -181,15 +181,13 @@ final class SeriesApi(
 
   private def handleDraw(s: Series, oldGameId: GameId): Funit =
     val unusedBans = s.unusedBans
-    val openingsPool =
-      if unusedBans.nonEmpty then unusedBans
-      else (s.remainingPicks(0) ++ s.remainingPicks(1)).distinctBy(_.name)
 
-    if openingsPool.isEmpty then
+    if unusedBans.isEmpty then
+      // 밴 오프닝이 모두 소진되면 시리즈 종료 (무승부 처리)
       val finished = s.setPhase(Series.Phase.Finished)
       repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
     else
-      val selected = scala.util.Random.shuffle(openingsPool).head
+      val selected = scala.util.Random.shuffle(unusedBans).head
       val round = s.currentRound
       val withOpening = s.markOpeningUsed(selected.id, round, SelectionMethod.SystemRandom)
 
