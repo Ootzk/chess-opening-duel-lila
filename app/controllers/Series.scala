@@ -167,6 +167,28 @@ final class Series(env: Env) extends LilaController(env):
           case None => JsonBadRequest(jsonError("Cannot cancel confirm"))
   }
 
+  // 픽 타임아웃 (선택 목록 + 랜덤 채우기 + 자동 확정)
+  def timeoutPicks(id: SeriesId) = AuthBody(parse.json) { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        fuccess(JsonBadRequest(jsonError("Not a player of this series")))
+      else
+        ctx.body.body.asOpt[JsArray].map(_.value.flatMap(_.asOpt[String]).toList) match
+          case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
+          case Some(names) =>
+            api.timeoutPicks(id, me.userId, names).map:
+              case Some(updated) =>
+                val myIdx = updated.playerIndex(me.userId).get
+                val oppIdx = 1 - myIdx
+                JsonOk(Json.obj(
+                  "ok" -> true,
+                  "phase" -> updated.phase.id,
+                  "myConfirmed" -> updated.player(myIdx).confirmedPicks,
+                  "opponentConfirmed" -> updated.player(oppIdx).confirmedPicks
+                ))
+              case None => JsonBadRequest(jsonError("Cannot timeout picks"))
+  }
+
   // 밴 확정 (양측 완료 시 다음 페이즈로)
   def confirmBans(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>
@@ -203,6 +225,28 @@ final class Series(env: Env) extends LilaController(env):
               "opponentConfirmed" -> updated.player(oppIdx).confirmedBans
             ))
           case None => JsonBadRequest(jsonError("Cannot cancel confirm"))
+  }
+
+  // 밴 타임아웃 (선택 목록 + 랜덤 채우기 + 자동 확정)
+  def timeoutBans(id: SeriesId) = AuthBody(parse.json) { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        fuccess(JsonBadRequest(jsonError("Not a player of this series")))
+      else
+        ctx.body.body.asOpt[JsArray].map(_.value.flatMap(_.asOpt[String]).toList) match
+          case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
+          case Some(names) =>
+            api.timeoutBans(id, me.userId, names).map:
+              case Some(updated) =>
+                val myIdx = updated.playerIndex(me.userId).get
+                val oppIdx = 1 - myIdx
+                JsonOk(Json.obj(
+                  "ok" -> true,
+                  "phase" -> updated.phase.id,
+                  "myConfirmed" -> updated.player(myIdx).confirmedBans,
+                  "opponentConfirmed" -> updated.player(oppIdx).confirmedBans
+                ))
+              case None => JsonBadRequest(jsonError("Cannot timeout bans"))
   }
 
   // 다음 오프닝 선택 (패자용, Selecting → Playing)

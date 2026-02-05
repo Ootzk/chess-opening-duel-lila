@@ -479,8 +479,10 @@ POST  /series/$id<\w{8}>/picks                controllers.Series.setPicks(id: Se
 POST  /series/$id<\w{8}>/bans                 controllers.Series.setBans(id: SeriesId)
 POST  /series/$id<\w{8}>/confirmPicks         controllers.Series.confirmPicks(id: SeriesId)
 POST  /series/$id<\w{8}>/cancelConfirmPicks   controllers.Series.cancelConfirmPicks(id: SeriesId)
+POST  /series/$id<\w{8}>/timeoutPicks         controllers.Series.timeoutPicks(id: SeriesId)
 POST  /series/$id<\w{8}>/confirmBans          controllers.Series.confirmBans(id: SeriesId)
 POST  /series/$id<\w{8}>/cancelConfirmBans    controllers.Series.cancelConfirmBans(id: SeriesId)
+POST  /series/$id<\w{8}>/timeoutBans          controllers.Series.timeoutBans(id: SeriesId)
 POST  /series/$id<\w{8}>/selectOpening        controllers.Series.selectNextOpening(id: SeriesId)
 POST  /series/$id<\w{8}>/selectRandom         controllers.Series.selectRandomOpening(id: SeriesId)
 

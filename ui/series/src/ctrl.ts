@@ -100,10 +100,70 @@ export default class SeriesPickCtrl {
       this.selectRandomOpening();
       return;
     }
-    // Auto-confirm on timeout
+    // Pick/Ban phase: 타임아웃 시 현재 선택 + 랜덤 채우기 + 자동 확정
     if (!this.myConfirmed) {
-      this.confirm();
+      if (this.isPicking) {
+        this.timeoutPicks();
+      } else if (this.isBanning) {
+        this.timeoutBans();
+      }
     }
+  }
+
+  // Pick 타임아웃: 현재 선택 + 랜덤 채우기 + 자동 확정
+  private async timeoutPicks(): Promise<void> {
+    try {
+      const selections = Array.from(this.selectedPicks);
+      const response = await fetch(`/series/${this.seriesId}/timeoutPicks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selections),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this.myConfirmed = data.myConfirmed ?? true;
+        this.opponentConfirmed = data.opponentConfirmed ?? false;
+        const newPhase = Number(data.phase);
+        if (newPhase !== this.phase) {
+          window.location.reload();
+        } else if (this.isWaiting) {
+          this.startPolling();
+        }
+      }
+    } catch (e) {
+      console.error('Error timeout picks:', e);
+    }
+    this.redraw();
+  }
+
+  // Ban 타임아웃: 현재 선택 + 랜덤 채우기 + 자동 확정
+  private async timeoutBans(): Promise<void> {
+    try {
+      const selections = Array.from(this.selectedBans);
+      const response = await fetch(`/series/${this.seriesId}/timeoutBans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selections),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this.myConfirmed = data.myConfirmed ?? true;
+        this.opponentConfirmed = data.opponentConfirmed ?? false;
+        const newPhase = Number(data.phase);
+        if (newPhase !== this.phase) {
+          if (newPhase === PhaseId.RandomSelecting) {
+            window.location.href = `/series/${this.seriesId}/random-selecting`;
+          } else {
+            window.location.reload();
+          }
+        } else if (this.isWaiting) {
+          this.startPolling();
+        }
+      }
+    } catch (e) {
+      console.error('Error timeout bans:', e);
+    }
+    this.redraw();
   }
 
   // Selecting 타임아웃 시 랜덤 선택

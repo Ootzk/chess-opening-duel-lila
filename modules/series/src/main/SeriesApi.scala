@@ -100,6 +100,38 @@ final class SeriesApi(
               val updated = s.updatePlayer(idx, _.cancelConfirmPicks)
               repo.update(updated).inject(Some(updated))
 
+  // ===== 픽 타임아웃 =====
+
+  def timeoutPicks(seriesId: SeriesId, userId: UserId, selectedNames: List[String]): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Picking then fuccess(None)
+            else if s.timeLeftInPhase > 0 then fuccess(None) // 아직 타임아웃 아님
+            else if s.player(idx).confirmedPicks then fuccess(Some(s)) // 이미 확정됨
+            else
+              // 현재 선택 + 랜덤 채우기
+              val currentPicks = selectedNames.flatMap(name => OpeningPresets.all.find(_.name == name))
+              val remaining = OpeningPresets.all.filterNot(p => currentPicks.exists(_.name == p.name))
+              val needed = Series.maxPicks - currentPicks.size
+              val randomFills = scala.util.Random.shuffle(remaining).take(needed)
+              val finalPicks = currentPicks ++ randomFills
+
+              // 기존 픽 제거 후 새 픽 추가
+              val withoutOldPicks = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
+              val newPicks = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
+              val withPicks = withoutOldPicks.addOpenings(newPicks)
+
+              // 확정 처리
+              val confirmed = withPicks.updatePlayer(idx, _.confirmPicks)
+              val updated =
+                if confirmed.bothPicksConfirmed then confirmed.setPhase(Series.Phase.Banning)
+                else confirmed
+              repo.update(updated).inject(Some(updated))
+
   // ===== 밴 확정 =====
 
   def confirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
@@ -133,6 +165,43 @@ final class SeriesApi(
             else
               val updated = s.updatePlayer(idx, _.cancelConfirmBans)
               repo.update(updated).inject(Some(updated))
+
+  // ===== 밴 타임아웃 =====
+
+  def timeoutBans(seriesId: SeriesId, userId: UserId, selectedNames: List[String]): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Banning then fuccess(None)
+            else if s.timeLeftInPhase > 0 then fuccess(None) // 아직 타임아웃 아님
+            else if s.player(idx).confirmedBans then fuccess(Some(s)) // 이미 확정됨
+            else
+              // 상대 픽에서 선택 가능한 밴 후보
+              val opponentPicks = s.picks(1 - idx).map(_.name).toSet
+              val currentBans = selectedNames.filter(opponentPicks.contains)
+                .flatMap(name => OpeningPresets.all.find(_.name == name))
+
+              // 남은 상대 픽 중에서 랜덤 채우기
+              val remaining = s.picks(1 - idx).filterNot(p => currentBans.exists(_.name == p.name))
+              val needed = Series.maxBans - currentBans.size
+              val randomFills = scala.util.Random.shuffle(remaining.toList).take(needed).map(_.toPreset)
+              val finalBans = currentBans ++ randomFills
+
+              // 기존 밴 제거 후 새 밴 추가
+              val withoutOldBans = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Ban)
+              val newBans = finalBans.map(preset => SeriesOpening.makeBan(preset, idx))
+              val withBans = withoutOldBans.addOpenings(newBans)
+
+              // 확정 처리
+              val confirmed = withBans.updatePlayer(idx, _.confirmBans)
+              if confirmed.bothBansConfirmed then
+                val withNeutral = confirmed.addNeutralOpening
+                startGame1(withNeutral)
+              else
+                repo.update(confirmed).inject(Some(confirmed))
 
   // ===== Game 1 시작 =====
 
