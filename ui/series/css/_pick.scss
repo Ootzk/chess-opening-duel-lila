@@ -230,14 +230,18 @@
   display: flex;
   gap: 1rem;
   justify-content: center;
+
+  // Give explicit width to opening cards in flex container
+  .series-pick__opening {
+    width: 150px;
+  }
 }
 
 // 선택된 오프닝 하이라이트
 .series-pick__opening.highlighted {
   border: 3px solid #f0c000;
   box-shadow: 0 0 15px rgba(240, 192, 0, 0.5);
-  transform: scale(1.05);
-  transition: all 0.3s ease;
+  // Note: transform: scale() breaks chessground piece positioning
 }
 
 // 이미 사용된 오프닝 (흐리게)
