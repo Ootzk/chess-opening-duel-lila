@@ -85,6 +85,11 @@ async function boot(
           // Replace crosstable or match-score (for Opening Duel matches)
           const $matchScore = $html.find('.series-score');
           if ($matchScore.length) {
+            // Preserve the label when updating (don't show next game number after game ends)
+            const $currentLabel = $('.series-score .series-score__label');
+            if ($currentLabel.length) {
+              $matchScore.find('.series-score__label').replaceWith($currentLabel.clone());
+            }
             $('.series-score').replaceWith($matchScore);
           } else {
             $('.crosstable').replaceWith($html.find('.crosstable'));

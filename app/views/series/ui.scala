@@ -16,6 +16,9 @@ object ui:
     val povIndex = ctx.userId.flatMap(s.playerIndex).getOrElse(0)
     val oppIndex = 1 - povIndex
 
+    // Sudden death 시 5경기 이상도 표시
+    val displayRounds = math.max(Series.bestOf, s.currentRound)
+
     div(cls := "series-score")(
       table(cls := "series-score__table")(
         thead(
@@ -27,7 +30,7 @@ object ui:
           )
         ),
         tbody(
-          (1 to Series.bestOf).map: round =>
+          (1 to displayRounds).map: round =>
             val gameOpt = s.games.find(_.round == round)
             val gid = gameOpt.map(_.gameId)
             val openingOpt = gameOpt.flatMap(g => s.openings.find(_.id == g.openingId))
@@ -69,11 +72,11 @@ object ui:
             )
         )
       ),
-      // 현재 오프닝 라벨
+      // 현재 오프닝 라벨 (게임 번호 + 오프닝 이름)
       div(cls := "series-score__label")(
         s.openingForRound(s.currentRound).fold(
-          s"Opening Duel - Game ${s.currentRound} of ${Series.bestOf}"
-        )(op => s"Opening Duel - ${op.name}")
+          s"Opening Duel - Game ${s.currentRound}"
+        )(op => s"Opening Duel - Game ${s.currentRound}: ${op.name}")
       )
     )
 
