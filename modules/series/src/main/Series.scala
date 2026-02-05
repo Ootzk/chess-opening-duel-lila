@@ -13,6 +13,7 @@ case class Series(
     openings: List[SeriesOpening],
     games: List[SeriesGame],
     phase: Series.Phase,
+    phaseStartedAt: Option[Instant],
     status: Series.Status,
     variant: chess.variant.Variant,
     clock: ClockConfig,
@@ -169,7 +170,14 @@ case class Series(
     )
 
   def setPhase(newPhase: Series.Phase): Series =
-    copy(phase = newPhase)
+    copy(phase = newPhase, phaseStartedAt = Some(nowInstant))
+
+  def timeLeftInPhase: Int =
+    phaseStartedAt match
+      case None => Series.phaseTimeout
+      case Some(startedAt) =>
+        val elapsed = java.time.Duration.between(startedAt, nowInstant).getSeconds.toInt
+        math.max(0, Series.phaseTimeout - elapsed)
 
   def bothPicksConfirmed: Boolean =
     players._1.confirmedPicks && players._2.confirmedPicks
@@ -182,6 +190,7 @@ object Series:
   val winsNeeded = 3
   val maxPicks = 5
   val maxBans = 2
+  val phaseTimeout = 30 // seconds
 
   enum Status(val id: Int):
     case Created extends Status(10)
@@ -209,18 +218,21 @@ object Series:
       player1: UserId,
       variant: chess.variant.Variant,
       clock: ClockConfig
-  ): Series = Series(
-    id = makeId,
-    players = (
-      SeriesPlayer(player0, index = 0),
-      SeriesPlayer(player1, index = 1)
-    ),
-    openings = Nil,
-    games = Nil,
-    phase = Phase.Picking,
-    status = Status.Created,
-    variant = variant,
-    clock = clock,
-    createdAt = nowInstant,
-    finishedAt = None
-  )
+  ): Series =
+    val now = nowInstant
+    Series(
+      id = makeId,
+      players = (
+        SeriesPlayer(player0, index = 0),
+        SeriesPlayer(player1, index = 1)
+      ),
+      openings = Nil,
+      games = Nil,
+      phase = Phase.Picking,
+      phaseStartedAt = Some(now),
+      status = Status.Created,
+      variant = variant,
+      clock = clock,
+      createdAt = now,
+      finishedAt = None
+    )

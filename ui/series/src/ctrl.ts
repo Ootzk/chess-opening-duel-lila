@@ -8,7 +8,7 @@ export default class SeriesPickCtrl {
   series: SeriesData;
   selectedPicks: Set<string> = new Set();
   selectedBans: Set<string> = new Set();
-  timeLeft: number = 30;
+  timeLeft: number;
   timerInterval?: number;
   myConfirmed: boolean = false;
   opponentConfirmed: boolean = false;
@@ -27,6 +27,9 @@ export default class SeriesPickCtrl {
     this.presets = config.presets;
     this.series = config.series;
 
+    // Use server-calculated timeLeft to prevent refresh abuse
+    this.timeLeft = config.series.timeLeft ?? 30;
+
     // Initialize selections and confirmed state from series data
     this.initFromSeries();
 
@@ -39,7 +42,12 @@ export default class SeriesPickCtrl {
       this.startPolling();
     } else {
       // Start timer for pick/ban phases and selecting
-      this.startTimer();
+      // If already timed out (timeLeft <= 0), trigger timeout immediately
+      if (this.timeLeft <= 0) {
+        this.onTimeout();
+      } else {
+        this.startTimer();
+      }
     }
   }
 

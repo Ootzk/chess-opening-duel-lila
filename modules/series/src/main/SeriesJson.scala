@@ -25,6 +25,11 @@ final class SeriesJson(
         else
           s.openings
 
+        // timeLeft는 Picking, Banning, Selecting phase에서만 의미 있음
+        val timeLeft =
+          if s.phase == Series.Phase.Playing || s.phase == Series.Phase.Finished then None
+          else Some(s.timeLeftInPhase)
+
         Json.obj(
           "id" -> s.id.value,
           "phase" -> s.phase.id,
@@ -43,6 +48,7 @@ final class SeriesJson(
         )
         .add("povIndex" -> povIndex)
         .add("currentGame" -> s.currentGameId.map(_.value))
+        .add("timeLeft" -> timeLeft)
         .add("selectingPlayer" -> {
           if s.phase == Series.Phase.Selecting then s.lastGameLoser
           else None

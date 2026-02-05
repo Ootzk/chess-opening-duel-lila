@@ -28,7 +28,7 @@ final class SeriesUi(helpers: Helpers):
           div(cls := "series-pick__header")(
             h1(phaseName),
             div(cls := "series-pick__timer")(
-              span(cls := "timer-display")("30")
+              span(cls := "timer-display")(s.timeLeftInPhase.toString)
             )
           ),
           div(cls := "series-pick__grid")(
