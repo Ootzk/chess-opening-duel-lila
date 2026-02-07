@@ -1,5 +1,6 @@
 package lila.series
 
+import akka.actor.Scheduler
 import com.softwaremill.macwire.*
 
 import lila.common.Bus
@@ -13,7 +14,7 @@ final class Env(
     userApi: lila.core.user.UserApi,
     onStart: lila.core.game.OnStart,
     lightUserApi: lila.core.user.LightUserApi
-)(using
+)(using scheduler: Scheduler)(using
     Executor,
     lila.core.game.IdGenerator
 ):
@@ -25,6 +26,24 @@ final class Env(
   lazy val api: SeriesApi = wire[SeriesApi]
 
   lazy val jsonView: SeriesJson = wire[SeriesJson]
+
+  // Server-side timeout scheduler (lazy to avoid circular dependency)
+  lazy val timeouts: SeriesTimeouts = SeriesTimeouts(scheduler, () => api)
+
+  // Subscribe to series creation to schedule initial timeout
+  Bus.sub[SeriesCreated]:
+    case SeriesCreated(s) =>
+      timeouts.schedule(s.id)
+
+  // Subscribe to phase changes to reschedule/cancel timeouts
+  Bus.sub[SeriesPhaseChanged]:
+    case SeriesPhaseChanged(s) =>
+      s.phase match
+        case Series.Phase.Banning =>
+          timeouts.schedule(s.id) // Reschedule for Banning phase
+        case Series.Phase.RandomSelecting | Series.Phase.Playing | Series.Phase.Selecting | Series.Phase.Finished =>
+          timeouts.cancel(s.id) // Cancel timeout when game starts
+        case _ => ()
 
   // Subscribe to game finish events
   Bus.sub[lila.core.game.FinishGame]:

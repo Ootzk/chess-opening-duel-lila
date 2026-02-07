@@ -70,7 +70,10 @@ final class Series(env: Env) extends LilaController(env):
   def apiShow(id: SeriesId) = Open:
     Found(api.byId(id)): s =>
       for
-        json <- env.series.jsonView(s, ctx.me.map(_.userId))
+        // Update lastSeenAt for the polling player
+        updated <- ctx.me.map(_.userId).flatMap(s.playerIndex).fold(fuccess(s)): _ =>
+          api.updateLastSeen(id, ctx.me.get.userId).map(_.getOrElse(s))
+        json <- env.series.jsonView(updated, ctx.me.map(_.userId))
       yield JsonOk(json)
 
   def nextGame(id: SeriesId) = Auth { ctx ?=> me ?=>

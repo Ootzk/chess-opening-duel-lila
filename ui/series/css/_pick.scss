@@ -370,4 +370,11 @@
       height: 16px;
     }
   }
+
+  &.disconnected {
+    .status-text {
+      color: $c-bad;
+      font-weight: bold;
+    }
+  }
 }

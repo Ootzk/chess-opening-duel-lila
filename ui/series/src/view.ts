@@ -242,7 +242,14 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
 
   // Right side: Opponent status (only in pick/ban phases)
   if (ctrl.isPicking || ctrl.isBanning) {
-    if (ctrl.opponentConfirmed) {
+    if (!ctrl.opponentOnline) {
+      rightSide.push(
+        h('div.series-pick__opponent-status.disconnected', [
+          h('span', 'Your opponent is '),
+          h('span.status-text', 'Disconnected!'),
+        ]),
+      );
+    } else if (ctrl.opponentConfirmed) {
       rightSide.push(
         h('div.series-pick__opponent-status.ready', [
           h('span', 'Your opponent is '),

@@ -1,5 +1,13 @@
 import type { PickConfig, SeriesData, OpeningPreset, SeriesOpening } from './interfaces';
-import { Phase as PhaseId, getMyPicks, getOpponentPicks, getMyBans, getRemainingPicks, getAllBans } from './interfaces';
+import {
+  Phase as PhaseId,
+  Status as StatusId,
+  getMyPicks,
+  getOpponentPicks,
+  getMyBans,
+  getRemainingPicks,
+  getAllBans,
+} from './interfaces';
 
 export default class SeriesPickCtrl {
   seriesId: string;
@@ -12,6 +20,7 @@ export default class SeriesPickCtrl {
   timerInterval?: number;
   myConfirmed: boolean = false;
   opponentConfirmed: boolean = false;
+  opponentOnline: boolean = true;
 
   // RandomSelecting phase state
   selectedOpening: SeriesOpening | null = null;
@@ -82,6 +91,9 @@ export default class SeriesPickCtrl {
       this.myConfirmed = this.series.players[povIndex].confirmedBans;
       this.opponentConfirmed = this.series.players[oppIndex].confirmedBans;
     }
+
+    // Load opponent online status
+    this.opponentOnline = this.series.players[oppIndex].isOnline;
   }
 
   private startTimer(): void {
@@ -411,6 +423,15 @@ export default class SeriesPickCtrl {
       const response = await fetch(`/api/series/${this.seriesId}`);
       if (response.ok) {
         const data = await response.json();
+
+        // Check if series was aborted
+        if (data.status === StatusId.Aborted) {
+          this.stopPolling();
+          alert('Series was aborted due to opponent disconnect.');
+          window.location.href = '/';
+          return;
+        }
+
         const newPhase = Number(data.phase);
         // Phase changed, redirect to appropriate page
         if (newPhase !== this.phase) {
@@ -430,7 +451,7 @@ export default class SeriesPickCtrl {
           }
         }
 
-        // Update opponent confirmed status
+        // Update opponent confirmed status and online status
         const povIndex = data.povIndex;
         if (povIndex !== undefined && data.players) {
           const oppIndex = 1 - povIndex;
@@ -441,8 +462,10 @@ export default class SeriesPickCtrl {
               : this.isBanning
                 ? oppPlayer.confirmedBans
                 : false;
-            if (oppConfirmed !== this.opponentConfirmed) {
+            const oppOnline = oppPlayer.isOnline ?? true;
+            if (oppConfirmed !== this.opponentConfirmed || oppOnline !== this.opponentOnline) {
               this.opponentConfirmed = oppConfirmed;
+              this.opponentOnline = oppOnline;
               this.redraw();
             }
           }

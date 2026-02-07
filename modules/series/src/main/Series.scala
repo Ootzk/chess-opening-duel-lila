@@ -42,10 +42,11 @@ case class Series(
   // Current round = finished games + 1
   def currentRound: Int = games.count(_.result.isDefined) + 1
 
-  def isCreated: Boolean = status == Series.Status.Created
-  def isStarted: Boolean = status == Series.Status.Started
-  def isFinished: Boolean = status == Series.Status.Finished
-  def isNotFinished: Boolean = !isFinished
+  def isCreated: Boolean    = status == Series.Status.Created
+  def isStarted: Boolean    = status == Series.Status.Started
+  def isFinished: Boolean   = status == Series.Status.Finished
+  def isAborted: Boolean    = status == Series.Status.Aborted
+  def isNotFinished: Boolean = !isFinished && !isAborted
 
   // Winner: must have higher score AND at least pointsNeeded (2.5)
   // Tie at 2.5-2.5 means sudden death continues
@@ -219,6 +220,7 @@ object Series:
     case Created extends Status(10)
     case Started extends Status(20)
     case Finished extends Status(30)
+    case Aborted extends Status(40)
 
   object Status:
     def apply(id: Int): Option[Status] = values.find(_.id == id)

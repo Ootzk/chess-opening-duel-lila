@@ -28,6 +28,7 @@ export interface SeriesPlayer {
   score: number;
   confirmedPicks: boolean;
   confirmedBans: boolean;
+  isOnline: boolean;
   user?: {
     id: string;
     name: string;
@@ -68,6 +69,14 @@ export const Phase = {
   Playing: 30,
   Selecting: 40,
   Finished: 50,
+} as const;
+
+// Status IDs matching Series.Status in Scala
+export const Status = {
+  Created: 10,
+  Started: 20,
+  Finished: 30,
+  Aborted: 40,
 } as const;
 
 // Helper functions

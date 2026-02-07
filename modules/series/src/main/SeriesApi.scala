@@ -25,11 +25,25 @@ final class SeriesApi(
       clock: ClockConfig
   ): Fu[Series] =
     val s = Series.make(player0, player1, variant, clock)
-    repo.insert(s).inject(s)
+    repo.insert(s).map: _ =>
+      Bus.pub(SeriesCreated(s))
+      s
 
   def byId(id: SeriesId): Fu[Option[Series]] = repo.byId(id)
 
   def byGameId(gameId: GameId): Fu[Option[Series]] = repo.byGameId(gameId)
+
+  // ===== Player Online Status =====
+
+  def updateLastSeen(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(Some(s))
+          case Some(idx) =>
+            val updated = s.updatePlayer(idx, _.updateLastSeen)
+            repo.update(updated).inject(Some(updated))
 
   // ===== 픽 설정 =====
 
@@ -82,10 +96,12 @@ final class SeriesApi(
             else if s.player(idx).confirmedPicks then fuccess(Some(s))
             else
               val confirmed = s.updatePlayer(idx, _.confirmPicks)
-              val updated =
-                if confirmed.bothPicksConfirmed then confirmed.setPhase(Series.Phase.Banning)
-                else confirmed
-              repo.update(updated).inject(Some(updated))
+              val (updated, phaseChanged) =
+                if confirmed.bothPicksConfirmed then (confirmed.setPhase(Series.Phase.Banning), true)
+                else (confirmed, false)
+              repo.update(updated).map: _ =>
+                if phaseChanged then Bus.pub(SeriesPhaseChanged(updated))
+                Some(updated)
 
   def cancelConfirmPicks(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
@@ -224,7 +240,9 @@ final class SeriesApi(
         ))
         _ <- repo.update(withGame)
         _ <- onStart.exec(game.id)
-      yield Some(withGame)
+      yield
+        Bus.pub(SeriesPhaseChanged(withGame))
+        Some(withGame)
 
   // ===== 게임 종료 처리 =====
 
@@ -313,6 +331,88 @@ final class SeriesApi(
                     _ <- repo.update(withGame)
                     _ <- onStart.exec(game.id)
                   yield Some(game)
+
+  // ===== Server-side Phase Timeout =====
+
+  def serverTimeoutPhase(seriesId: SeriesId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.phase match
+          case Series.Phase.Picking   => serverTimeoutPicking(s)
+          case Series.Phase.Banning   => serverTimeoutBanning(s)
+          case Series.Phase.Selecting => handleSelectingTimeout(s.id).map(_ => Some(s))
+          case _                      => fuccess(Some(s))
+
+  private def serverTimeoutPicking(s: Series): Fu[Option[Series]] =
+    // 미확정 플레이어들 자동 처리
+    val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedPicks)
+
+    // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
+    val disconnectedPlayer = unconfirmedPlayers.find(idx => s.player(idx).isDisconnected)
+    disconnectedPlayer match
+      case Some(_) => abortSeries(s)
+      case None =>
+        unconfirmedPlayers
+          .foldLeft(fuccess(s)): (fuSeries, idx) =>
+            fuSeries.map: currentS =>
+              // 현재 픽 + 랜덤 채우기
+              val currentPicks = currentS.picks(idx)
+              val remaining    = OpeningPresets.all.filterNot(p => currentPicks.exists(_.name == p.name))
+              val needed       = Series.maxPicks - currentPicks.size
+              val randomFills  = scala.util.Random.shuffle(remaining).take(needed)
+              val finalPicks   = currentPicks.map(_.toPreset) ++ randomFills
+
+              val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
+              val newPicks   = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
+              val withPicks  = withoutOld.addOpenings(newPicks)
+              val confirmed  = withPicks.updatePlayer(idx, _.confirmPicks)
+              confirmed
+          .flatMap: updated =>
+            val final_ =
+              if updated.bothPicksConfirmed then updated.setPhase(Series.Phase.Banning)
+              else updated
+            repo.update(final_).inject(Some(final_))
+
+  private def serverTimeoutBanning(s: Series): Fu[Option[Series]] =
+    // 미확정 플레이어들 자동 처리
+    val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedBans)
+
+    // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
+    val disconnectedPlayer = unconfirmedPlayers.find(idx => s.player(idx).isDisconnected)
+    disconnectedPlayer match
+      case Some(_) => abortSeries(s)
+      case None =>
+        unconfirmedPlayers
+          .foldLeft(fuccess(s)): (fuSeries, idx) =>
+            fuSeries.map: currentS =>
+              val opponentPicks = currentS.picks(1 - idx)
+              val currentBans   = currentS.bans(idx)
+              val remaining     = opponentPicks.filterNot(p => currentBans.exists(_.name == p.name))
+              val needed        = Series.maxBans - currentBans.size
+              val randomFills = scala.util.Random.shuffle(remaining.toList).take(needed).map(_.toPreset)
+              val finalBans   = currentBans.map(_.toPreset) ++ randomFills
+
+              val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Ban)
+              val newBans    = finalBans.map(preset => SeriesOpening.makeBan(preset, idx))
+              val withBans   = withoutOld.addOpenings(newBans)
+              val confirmed  = withBans.updatePlayer(idx, _.confirmBans)
+              confirmed
+          .flatMap: updated =>
+            if updated.bothBansConfirmed then
+              val withNeutral = updated.addNeutralOpening
+              startGame1(withNeutral)
+            else repo.update(updated).inject(Some(updated))
+
+  private def abortSeries(s: Series): Fu[Option[Series]] =
+    val aborted = s.copy(
+      status = Series.Status.Aborted,
+      phase = Series.Phase.Finished,
+      finishedAt = Some(nowInstant)
+    )
+    repo.update(aborted).map: _ =>
+      Bus.pub(SeriesAborted(aborted))
+      Some(aborted)
 
   // ===== 타임아웃 처리 =====
 
@@ -437,7 +537,10 @@ final class SeriesApi(
         .start
 
 // Events
+case class SeriesCreated(s: Series)
+case class SeriesAborted(s: Series)
 case class SeriesFinished(s: Series)
 case class SeriesGameFinished(s: Series, gameId: GameId, winnerId: Option[UserId])
 case class SeriesEnterSelecting(s: Series, oldGameId: GameId)
 case class SeriesDrawRandomSelecting(s: Series, oldGameId: GameId)
+case class SeriesPhaseChanged(s: Series)
