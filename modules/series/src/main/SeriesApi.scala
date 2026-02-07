@@ -1,5 +1,7 @@
 package lila.series
 
+import akka.actor.Scheduler
+import scala.concurrent.duration.*
 import chess.Clock.Config as ClockConfig
 import chess.format.Fen
 import chess.ByColor
@@ -13,7 +15,8 @@ final class SeriesApi(
     repo: SeriesRepo,
     gameRepo: lila.core.game.GameRepo,
     userApi: lila.core.user.UserApi,
-    onStart: lila.core.game.OnStart
+    onStart: lila.core.game.OnStart,
+    scheduler: Scheduler
 )(using Executor, lila.core.game.IdGenerator):
 
   import lila.core.game.Game
@@ -96,12 +99,12 @@ final class SeriesApi(
             else if s.player(idx).confirmedPicks then fuccess(Some(s))
             else
               val confirmed = s.updatePlayer(idx, _.confirmPicks)
-              val (updated, phaseChanged) =
-                if confirmed.bothPicksConfirmed then (confirmed.setPhase(Series.Phase.Banning), true)
-                else (confirmed, false)
-              repo.update(updated).map: _ =>
-                if phaseChanged then Bus.pub(SeriesPhaseChanged(updated))
-                Some(updated)
+              repo.update(confirmed).map: _ =>
+                // Schedule phase transition after delay when both confirmed
+                if confirmed.bothPicksConfirmed then
+                  scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                    transitionToPhase(seriesId, Series.Phase.Banning)
+                Some(confirmed)
 
   def cancelConfirmPicks(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
@@ -162,12 +165,12 @@ final class SeriesApi(
             else if s.player(idx).confirmedBans then fuccess(Some(s))
             else
               val confirmed = s.updatePlayer(idx, _.confirmBans)
-              if confirmed.bothBansConfirmed then
-                // 중립 오프닝(Standard Game) 추가
-                val withNeutral = confirmed.addNeutralOpening
-                startGame1(withNeutral)
-              else
-                repo.update(confirmed).inject(Some(confirmed))
+              repo.update(confirmed).map: _ =>
+                // Schedule game start after delay when both confirmed
+                if confirmed.bothBansConfirmed then
+                  scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                    startGame1Delayed(seriesId)
+                Some(confirmed)
 
   def cancelConfirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
@@ -181,6 +184,26 @@ final class SeriesApi(
             else
               val updated = s.updatePlayer(idx, _.cancelConfirmBans)
               repo.update(updated).inject(Some(updated))
+
+  // ===== Delayed Phase Transition (after both confirm) =====
+
+  private def transitionToPhase(seriesId: SeriesId, phase: Series.Phase): Unit =
+    repo.byId(seriesId).foreach:
+      case None => ()
+      case Some(s) =>
+        // Only transition if still in expected phase
+        if s.bothPicksConfirmed && s.phase == Series.Phase.Picking then
+          val updated = s.setPhase(phase)
+          repo.update(updated).foreach(_ => Bus.pub(SeriesPhaseChanged(updated)))
+
+  private def startGame1Delayed(seriesId: SeriesId): Unit =
+    repo.byId(seriesId).foreach:
+      case None => ()
+      case Some(s) =>
+        // Only start if still in Banning phase with both confirmed
+        if s.bothBansConfirmed && s.phase == Series.Phase.Banning then
+          val withNeutral = s.addNeutralOpening
+          startGame1(withNeutral)
 
   // ===== 밴 타임아웃 =====
 
@@ -345,64 +368,70 @@ final class SeriesApi(
           case _                      => fuccess(Some(s))
 
   private def serverTimeoutPicking(s: Series): Fu[Option[Series]] =
-    // 미확정 플레이어들 자동 처리
-    val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedPicks)
+    // 양측 모두 확정됐으면 3초 스케줄이 처리하므로 여기서는 아무것도 안 함
+    if s.bothPicksConfirmed then fuccess(Some(s))
+    else
+      // 미확정 플레이어들 자동 처리
+      val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedPicks)
 
-    // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
-    val disconnectedPlayer = unconfirmedPlayers.find(idx => s.player(idx).isDisconnected)
-    disconnectedPlayer match
-      case Some(_) => abortSeries(s)
-      case None =>
-        unconfirmedPlayers
-          .foldLeft(fuccess(s)): (fuSeries, idx) =>
-            fuSeries.map: currentS =>
-              // 현재 픽 + 랜덤 채우기
-              val currentPicks = currentS.picks(idx)
-              val remaining    = OpeningPresets.all.filterNot(p => currentPicks.exists(_.name == p.name))
-              val needed       = Series.maxPicks - currentPicks.size
-              val randomFills  = scala.util.Random.shuffle(remaining).take(needed)
-              val finalPicks   = currentPicks.map(_.toPreset) ++ randomFills
+      // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
+      val disconnectedPlayer = unconfirmedPlayers.find(idx => s.player(idx).isDisconnected)
+      disconnectedPlayer match
+        case Some(_) => abortSeries(s)
+        case None =>
+          unconfirmedPlayers
+            .foldLeft(fuccess(s)): (fuSeries, idx) =>
+              fuSeries.map: currentS =>
+                // 현재 픽 + 랜덤 채우기
+                val currentPicks = currentS.picks(idx)
+                val remaining    = OpeningPresets.all.filterNot(p => currentPicks.exists(_.name == p.name))
+                val needed       = Series.maxPicks - currentPicks.size
+                val randomFills  = scala.util.Random.shuffle(remaining).take(needed)
+                val finalPicks   = currentPicks.map(_.toPreset) ++ randomFills
 
-              val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
-              val newPicks   = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
-              val withPicks  = withoutOld.addOpenings(newPicks)
-              val confirmed  = withPicks.updatePlayer(idx, _.confirmPicks)
-              confirmed
-          .flatMap: updated =>
-            val final_ =
-              if updated.bothPicksConfirmed then updated.setPhase(Series.Phase.Banning)
-              else updated
-            repo.update(final_).inject(Some(final_))
+                val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
+                val newPicks   = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
+                val withPicks  = withoutOld.addOpenings(newPicks)
+                val confirmed  = withPicks.updatePlayer(idx, _.confirmPicks)
+                confirmed
+            .flatMap: updated =>
+              val final_ =
+                if updated.bothPicksConfirmed then updated.setPhase(Series.Phase.Banning)
+                else updated
+              repo.update(final_).inject(Some(final_))
 
   private def serverTimeoutBanning(s: Series): Fu[Option[Series]] =
-    // 미확정 플레이어들 자동 처리
-    val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedBans)
+    // 양측 모두 확정됐으면 3초 스케줄이 처리하므로 여기서는 아무것도 안 함
+    if s.bothBansConfirmed then fuccess(Some(s))
+    else
+      // 미확정 플레이어들 자동 처리
+      val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedBans)
 
-    // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
-    val disconnectedPlayer = unconfirmedPlayers.find(idx => s.player(idx).isDisconnected)
-    disconnectedPlayer match
-      case Some(_) => abortSeries(s)
-      case None =>
-        unconfirmedPlayers
-          .foldLeft(fuccess(s)): (fuSeries, idx) =>
-            fuSeries.map: currentS =>
-              val opponentPicks = currentS.picks(1 - idx)
-              val currentBans   = currentS.bans(idx)
-              val remaining     = opponentPicks.filterNot(p => currentBans.exists(_.name == p.name))
-              val needed        = Series.maxBans - currentBans.size
-              val randomFills = scala.util.Random.shuffle(remaining.toList).take(needed).map(_.toPreset)
-              val finalBans   = currentBans.map(_.toPreset) ++ randomFills
+      // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
+      val disconnectedPlayer = unconfirmedPlayers.find(idx => s.player(idx).isDisconnected)
+      disconnectedPlayer match
+        case Some(_) => abortSeries(s)
+        case None =>
+          unconfirmedPlayers
+            .foldLeft(fuccess(s)): (fuSeries, idx) =>
+              fuSeries.map: currentS =>
+                val opponentPicks = currentS.picks(1 - idx)
+                val currentBans   = currentS.bans(idx)
+                val remaining     = opponentPicks.filterNot(p => currentBans.exists(_.name == p.name))
+                val needed        = Series.maxBans - currentBans.size
+                val randomFills = scala.util.Random.shuffle(remaining.toList).take(needed).map(_.toPreset)
+                val finalBans   = currentBans.map(_.toPreset) ++ randomFills
 
-              val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Ban)
-              val newBans    = finalBans.map(preset => SeriesOpening.makeBan(preset, idx))
-              val withBans   = withoutOld.addOpenings(newBans)
-              val confirmed  = withBans.updatePlayer(idx, _.confirmBans)
-              confirmed
-          .flatMap: updated =>
-            if updated.bothBansConfirmed then
-              val withNeutral = updated.addNeutralOpening
-              startGame1(withNeutral)
-            else repo.update(updated).inject(Some(updated))
+                val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Ban)
+                val newBans    = finalBans.map(preset => SeriesOpening.makeBan(preset, idx))
+                val withBans   = withoutOld.addOpenings(newBans)
+                val confirmed  = withBans.updatePlayer(idx, _.confirmBans)
+                confirmed
+            .flatMap: updated =>
+              if updated.bothBansConfirmed then
+                val withNeutral = updated.addNeutralOpening
+                startGame1(withNeutral)
+              else repo.update(updated).inject(Some(updated))
 
   private def abortSeries(s: Series): Fu[Option[Series]] =
     val aborted = s.copy(

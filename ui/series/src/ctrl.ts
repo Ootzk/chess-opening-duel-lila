@@ -216,7 +216,8 @@ export default class SeriesPickCtrl {
   }
 
   get isWaiting(): boolean {
-    return this.myConfirmed && !this.opponentConfirmed;
+    // 본인이 확정했으면 Cancel 가능 (양측 모두 확정 후 3초 대기 중에도)
+    return this.myConfirmed;
   }
 
   // Selecting phase: 상대가 선택 중인지 (내가 승자인지)

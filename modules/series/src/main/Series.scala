@@ -215,6 +215,7 @@ object Series:
   val maxBans = 2
   val phaseTimeout = 30 // seconds
   val randomSelectingTimeout = 5 // seconds
+  val bothConfirmedDelay = 3 // seconds - delay after both players confirm before phase transition
 
   enum Status(val id: Int):
     case Created extends Status(10)

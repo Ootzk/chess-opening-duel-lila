@@ -21,9 +21,12 @@ final class Env(
 
   private val seriesColl: Coll = db(CollName("series"))
 
+  // Make scheduler available for wire macro
+  private val apiScheduler: Scheduler = scheduler
+
   lazy val repo: SeriesRepo = wire[SeriesRepo]
 
-  lazy val api: SeriesApi = wire[SeriesApi]
+  lazy val api: SeriesApi = SeriesApi(repo, gameRepo, userApi, onStart, apiScheduler)
 
   lazy val jsonView: SeriesJson = wire[SeriesJson]
 
