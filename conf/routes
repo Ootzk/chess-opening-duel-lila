@@ -486,6 +486,9 @@ POST  /series/$id<\w{8}>/cancelConfirmBans    controllers.Series.cancelConfirmBa
 POST  /series/$id<\w{8}>/timeoutBans          controllers.Series.timeoutBans(id: SeriesId)
 POST  /series/$id<\w{8}>/selectOpening        controllers.Series.selectNextOpening(id: SeriesId)
 POST  /series/$id<\w{8}>/selectRandom         controllers.Series.selectRandomOpening(id: SeriesId)
+POST  /series/$id<\w{8}>/setSelectingPick     controllers.Series.setSelectingPick(id: SeriesId)
+POST  /series/$id<\w{8}>/confirmSelecting     controllers.Series.confirmSelecting(id: SeriesId)
+POST  /series/$id<\w{8}>/cancelConfirmSelecting controllers.Series.cancelConfirmSelecting(id: SeriesId)
 POST  /series/$id<\w{8}>/forfeit              controllers.Series.forfeit(id: SeriesId)
 POST  /series/$id<\w{8}>/rematch             controllers.Series.rematch(id: SeriesId)
 

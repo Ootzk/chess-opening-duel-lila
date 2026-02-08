@@ -354,9 +354,93 @@ final class SeriesApi(
         _ = Bus.pub(SeriesDrawRandomSelecting(withGame, oldGameId))
       yield ()
 
-  // ===== 패자가 오프닝 선택 =====
+  // ===== Selecting Phase: 패자가 오프닝 선택 =====
 
-  def selectNextOpening(seriesId: SeriesId, userId: UserId, preset: OpeningPreset): Fu[Option[Game]] =
+  /** 실시간 선택 동기화 — DB에 저장하지 않고 WS로만 브로드캐스트 */
+  def setSelectingPick(seriesId: SeriesId, userId: UserId, presetName: Option[String]): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Selecting then fuccess(None)
+            else if s.lastGameLoser != Some(idx) then fuccess(None)
+            else
+              socket.foreach(_.notifySelectingPick(seriesId, presetName))
+              fuccess(Some(s))
+
+  /** Confirm selecting pick — 3초 delay 후 게임 생성 */
+  def confirmSelectingPick(seriesId: SeriesId, userId: UserId, presetName: String): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Selecting then fuccess(None)
+            else if s.lastGameLoser != Some(idx) then fuccess(None)
+            else if s.player(idx).confirmedSelecting then fuccess(Some(s))
+            else
+              val remaining = s.remainingPicks(idx)
+              remaining.find(_.name == presetName) match
+                case None => fuccess(None)
+                case Some(_) =>
+                  repo.setConfirmedSelecting(seriesId, idx, true, Some(presetName)).flatMap: _ =>
+                    socketNotifyConfirmed(seriesId, idx, "selecting")
+                    scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                      startSelectingDelayed(seriesId)
+                    repo.byId(seriesId).map(_.orElse(Some(s)))
+
+  /** Cancel selecting confirm — 3초 이내 취소 */
+  def cancelConfirmSelecting(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Selecting then fuccess(None)
+            else if !s.player(idx).confirmedSelecting then fuccess(Some(s))
+            else
+              repo.setConfirmedSelecting(seriesId, idx, false, None).flatMap: _ =>
+                socketNotifyCancelConfirmed(seriesId, idx, "selecting")
+                repo.byId(seriesId).map(_.orElse(Some(s)))
+
+  /** 3초 delay 후 실행 — confirmedSelecting이 여전히 true면 게임 생성 */
+  private def startSelectingDelayed(seriesId: SeriesId): Unit =
+    repo.byId(seriesId).foreach:
+      case Some(s) if s.phase == Series.Phase.Selecting =>
+        s.lastGameLoser match
+          case Some(loserIdx) if s.player(loserIdx).confirmedSelecting =>
+            s.player(loserIdx).selectingPick match
+              case Some(pickName) =>
+                val remaining = s.remainingPicks(loserIdx)
+                remaining.find(_.name == pickName).foreach: opening =>
+                  val round = s.currentRound
+                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
+                  val clearSelecting = withOpening.updatePlayer(loserIdx, _.clearSelecting)
+
+                  for
+                    game <- createGame(clearSelecting, round, opening)
+                    withGame = clearSelecting
+                      .addGame(SeriesGame(
+                        gameId = game.id,
+                        round = round,
+                        openingId = opening.id,
+                        whitePlayerIndex = clearSelecting.whitePlayerIndex(round)
+                      ))
+                      .setPhase(Series.Phase.Playing)
+                    _ <- repo.update(withGame)
+                    _ <- onStart.exec(game.id)
+                    _ = Bus.pub(SeriesPhaseChanged(withGame))
+                  yield ()
+              case None => () // no pick name — should not happen
+          case _ => () // cancelled or phase changed
+      case _ => ()
+
+  /** Legacy: immediate select (for backward compatibility with selectNextOpening endpoint) */
+  def selectNextOpening(seriesId: SeriesId, userId: UserId, preset: OpeningPreset): Fu[Option[lila.core.game.Game]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
@@ -372,15 +456,16 @@ final class SeriesApi(
                 case Some(opening) =>
                   val round = s.currentRound
                   val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
+                  val clearSelecting = withOpening.updatePlayer(idx, _.clearSelecting)
 
                   for
-                    game <- createGame(withOpening, round, opening)
-                    withGame = withOpening
+                    game <- createGame(clearSelecting, round, opening)
+                    withGame = clearSelecting
                       .addGame(SeriesGame(
                         gameId = game.id,
                         round = round,
                         openingId = opening.id,
-                        whitePlayerIndex = withOpening.whitePlayerIndex(round)
+                        whitePlayerIndex = clearSelecting.whitePlayerIndex(round)
                       ))
                       .setPhase(Series.Phase.Playing)
                     _ <- repo.update(withGame)
@@ -397,7 +482,7 @@ final class SeriesApi(
         s.phase match
           case Series.Phase.Picking   => serverTimeoutPicking(s)
           case Series.Phase.Banning   => serverTimeoutBanning(s)
-          case Series.Phase.Selecting => handleSelectingTimeout(s.id).map(_ => Some(s))
+          case Series.Phase.Selecting => serverTimeoutSelecting(s)
           case _                      => fuccess(Some(s))
 
   private def serverTimeoutPicking(s: Series): Fu[Option[Series]] =
@@ -497,6 +582,34 @@ final class SeriesApi(
     repo.update(aborted).map: _ =>
       Bus.pub(SeriesAborted(aborted))
       Some(aborted)
+
+  /** Forfeit by player index (for server-side disconnect timeout) */
+  private def forfeitByIndex(s: Series, loserIdx: Int): Fu[Option[Series]] =
+    val forfeited = s.copy(
+      forfeitBy = Some(loserIdx),
+      phase = Series.Phase.Finished,
+      status = Series.Status.Finished,
+      finishedAt = Some(nowInstant)
+    )
+    repo.update(forfeited).map: _ =>
+      Bus.pub(SeriesForfeited(forfeited))
+      Some(forfeited)
+
+  private def serverTimeoutSelecting(s: Series): Fu[Option[Series]] =
+    s.lastGameLoser match
+      case None => fuccess(Some(s))
+      case Some(loserIdx) =>
+        // 이미 confirmedSelecting이면 3초 스케줄이 처리 중
+        if s.player(loserIdx).confirmedSelecting then fuccess(Some(s))
+        else
+          val p0dc = s.player(0).isDisconnected
+          val p1dc = s.player(1).isDisconnected
+          if p0dc && p1dc then abortSeries(s)           // 양측 DC → Abort
+          else if p0dc || p1dc then                       // 한쪽 DC → DC한 쪽 패배
+            val dcIdx = if p0dc then 0 else 1
+            forfeitByIndex(s, dcIdx)
+          else                                            // 양측 online → 랜덤 선택
+            handleSelectingTimeout(s.id).map(_ => Some(s))
 
   // ===== 타임아웃 처리 =====
 

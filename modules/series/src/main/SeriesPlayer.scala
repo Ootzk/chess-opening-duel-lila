@@ -9,6 +9,8 @@ case class SeriesPlayer(
     score: Int = 0, // Internal: win=2, draw=1, loss=0
     confirmedPicks: Boolean = false,
     confirmedBans: Boolean = false,
+    confirmedSelecting: Boolean = false,
+    selectingPick: Option[String] = None, // 선택한 오프닝 이름
     lastSeenAt: Option[Instant] = None
 ):
   def addWin: SeriesPlayer                 = copy(score = score + 2)
@@ -18,6 +20,9 @@ case class SeriesPlayer(
   def cancelConfirmPicks: SeriesPlayer     = copy(confirmedPicks = false)
   def confirmBans: SeriesPlayer            = copy(confirmedBans = true)
   def cancelConfirmBans: SeriesPlayer      = copy(confirmedBans = false)
+  def confirmSelecting(pick: String): SeriesPlayer = copy(confirmedSelecting = true, selectingPick = Some(pick))
+  def cancelConfirmSelecting: SeriesPlayer = copy(confirmedSelecting = false)
+  def clearSelecting: SeriesPlayer         = copy(confirmedSelecting = false, selectingPick = None)
   def updateLastSeen: SeriesPlayer         = copy(lastSeenAt = Some(nowInstant))
   // None = 아직 접속 여부를 모름 → online으로 가정
   // Some(time) = time이 5초 이내면 online, 아니면 offline

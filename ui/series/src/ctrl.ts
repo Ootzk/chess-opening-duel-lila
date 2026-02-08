@@ -23,6 +23,9 @@ export default class SeriesPickCtrl {
   opponentConfirmed: boolean = false;
   opponentOnline: boolean = true;
 
+  // Selecting phase: opponent's real-time pick (via WS)
+  opponentSelectingPick: string | null = null;
+
   // RandomSelecting phase state
   selectedOpening: SeriesOpening | null = null;
   randomSelectingCountdown: number = 5;
@@ -58,17 +61,13 @@ export default class SeriesPickCtrl {
       return;
     } else if (this.isRandomSelecting) {
       this.startRandomSelecting();
-    } else if (this.isSelecting && this.isWaitingForOpponentSelect) {
-      // Winner waiting for loser to select - WebSocket will notify us
-      this.startTimer();
     } else {
-      // Start timer for pick/ban phases and selecting
+      // Start timer for pick/ban/selecting phases
       // If already timed out (timeLeft <= 0), trigger timeout immediately
       if (this.timeLeft <= 0) {
         this.onTimeout();
       } else {
         this.startTimer();
-        // WebSocket handles opponent status updates (pick/ban phases)
       }
     }
   }
@@ -94,6 +93,14 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       this.myConfirmed = this.series.players[povIndex].confirmedBans;
       this.opponentConfirmed = this.series.players[oppIndex].confirmedBans;
+    } else if (this.isSelecting && this.isMyTurnToSelect) {
+      this.myConfirmed = this.series.players[povIndex].confirmedSelecting;
+      // Load saved selectingPick if any
+      const savedPick = this.series.players[povIndex].selectingPick;
+      if (savedPick) {
+        this.selectedSelectingPick.clear();
+        this.selectedSelectingPick.add(savedPick);
+      }
     }
 
     // Load opponent online status
@@ -124,9 +131,12 @@ export default class SeriesPickCtrl {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
     }
-    // Selecting phase: 타임아웃 시 랜덤 선택
-    if (this.isSelecting && this.isMyTurnToSelect) {
-      this.selectRandomOpening();
+    // Selecting phase: 타임아웃 시 랜덤 선택 (패자만)
+    if (this.isSelecting) {
+      if (this.isMyTurnToSelect && !this.myConfirmed) {
+        this.selectRandomOpening();
+      }
+      // 승자는 서버 타임아웃이 처리 (forfeit/random)
       return;
     }
     // Pick/Ban phase: 타임아웃 시 현재 선택 + 랜덤 채우기 + 자동 확정
@@ -276,9 +286,9 @@ export default class SeriesPickCtrl {
       const oppPicks = getOpponentPicks(this.series);
       return oppPicks.map(o => ({ name: o.name, fen: o.fen, url: o.url || '' }));
     } else if (this.isSelecting) {
-      // Can only select from own remaining picks
-      const povIndex = this.series.povIndex ?? 0;
-      const remaining = getRemainingPicks(this.series, povIndex);
+      // Both players see the loser's remaining picks
+      const selectingIdx = this.series.selectingPlayer ?? 0;
+      const remaining = getRemainingPicks(this.series, selectingIdx);
       return remaining.map(o => ({ name: o.name, fen: o.fen, url: o.url || '' }));
     }
     return [];
@@ -327,8 +337,20 @@ export default class SeriesPickCtrl {
   }
 
   private async sendSelections(): Promise<void> {
-    // Selecting phase doesn't send intermediate selections; confirm handles it
-    if (this.isSelecting) return;
+    if (this.isSelecting) {
+      // Real-time sync: send current pick to server for WS broadcast
+      const selected = Array.from(this.selectedSelectingPick)[0] ?? null;
+      try {
+        await fetch(`/series/${this.seriesId}/setSelectingPick`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(selected),
+        });
+      } catch (e) {
+        console.error('Error sending selecting pick:', e);
+      }
+      return;
+    }
 
     const endpoint = this.isPicking
       ? `/series/${this.seriesId}/picks`
@@ -356,58 +378,55 @@ export default class SeriesPickCtrl {
   async confirm(): Promise<void> {
     if (this.myConfirmed) return;
 
-    const endpoint = this.isPicking
-      ? `/series/${this.seriesId}/confirmPicks`
-      : this.isBanning
-        ? `/series/${this.seriesId}/confirmBans`
-        : this.isSelecting
-          ? `/series/${this.seriesId}/selectOpening`
-          : null;
-
-    if (!endpoint) return;
-
-    try {
-      let response: Response;
-
-      if (this.isSelecting) {
-        // For selecting, send the chosen opening name
-        const selected = Array.from(this.currentSelections)[0];
-        if (!selected) return; // No selection yet
-        response = await fetch(endpoint, {
+    if (this.isSelecting) {
+      // Selecting phase: confirm with 3s cancel window
+      const selected = Array.from(this.selectedSelectingPick)[0];
+      if (!selected) return;
+      try {
+        const response = await fetch(`/series/${this.seriesId}/confirmSelecting`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(selected),
         });
-      } else {
-        response = await fetch(endpoint, {
-          method: 'POST',
-        });
+        if (response.ok) {
+          const data = await response.json();
+          this.myConfirmed = data.confirmedSelecting ?? true;
+          // Don't redirect — 3s delay, then WS "phase" event triggers redirect
+        }
+      } catch (e) {
+        console.error('Error confirming selecting:', e);
       }
+      this.redraw();
+      return;
+    }
+
+    const endpoint = this.isPicking
+      ? `/series/${this.seriesId}/confirmPicks`
+      : this.isBanning
+        ? `/series/${this.seriesId}/confirmBans`
+        : null;
+
+    if (!endpoint) return;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+      });
 
       if (response.ok) {
         const data = await response.json();
-
-        // Selecting phase returns redirect URL directly
-        if (this.isSelecting && data.redirect) {
-          console.log('[series] Selecting: Redirecting to game:', data.redirect);
-          window.location.href = data.redirect;
-          return;
-        }
 
         this.myConfirmed = data.myConfirmed ?? true;
         this.opponentConfirmed = data.opponentConfirmed ?? false;
 
         const newPhase = Number(data.phase);
-        console.log('[series] confirm response:', { newPhase, currentPhase: this.phase, RandomSelecting: PhaseId.RandomSelecting });
 
         // Phase changed, redirect to appropriate page
         if (newPhase !== this.phase) {
           if (newPhase === PhaseId.RandomSelecting) {
-            console.log('[series] Redirecting to random-selecting page');
             window.location.href = `/series/${this.seriesId}/random-selecting`;
             return;
           } else {
-            console.log('[series] Reloading page for phase:', newPhase);
             window.location.reload();
             return;
           }
@@ -428,13 +447,23 @@ export default class SeriesPickCtrl {
     this.fetchState();
   }
 
-  /** Handle confirmed event - opponent confirmed or cancelled their picks/bans */
+  /** Handle confirmed event - opponent confirmed or cancelled their picks/bans/selecting */
   handleConfirmed(data: { player: number; phase: string; confirmed?: boolean }): void {
     const povIndex = this.series.povIndex ?? 0;
     if (data.player !== povIndex) {
       this.opponentConfirmed = data.confirmed !== false;
       this.redraw();
+    } else if (data.phase === 'selecting') {
+      // My own confirm/cancel echoed back
+      this.myConfirmed = data.confirmed !== false;
+      this.redraw();
     }
+  }
+
+  /** Handle selectingPick event - opponent's real-time pick during Selecting phase */
+  handleSelectingPick(data: { name: string | null }): void {
+    this.opponentSelectingPick = data.name;
+    this.redraw();
   }
 
   /** Handle phase event - phase changed */
@@ -530,7 +559,9 @@ export default class SeriesPickCtrl {
               ? oppPlayer.confirmedPicks
               : this.isBanning
                 ? oppPlayer.confirmedBans
-                : false;
+                : this.isSelecting
+                  ? oppPlayer.confirmedSelecting
+                  : false;
             const oppOnline = oppPlayer.isOnline ?? true;
             if (oppConfirmed !== this.opponentConfirmed || oppOnline !== this.opponentOnline) {
               this.opponentConfirmed = oppConfirmed;
@@ -547,6 +578,22 @@ export default class SeriesPickCtrl {
 
   async cancelConfirm(): Promise<void> {
     if (!this.myConfirmed) return;
+
+    if (this.isSelecting) {
+      try {
+        const response = await fetch(`/series/${this.seriesId}/cancelConfirmSelecting`, {
+          method: 'POST',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          this.myConfirmed = data.confirmedSelecting ?? false;
+        }
+      } catch (e) {
+        console.error('Error canceling selecting confirm:', e);
+      }
+      this.redraw();
+      return;
+    }
 
     const endpoint = this.isPicking
       ? `/series/${this.seriesId}/cancelConfirmPicks`
@@ -574,7 +621,7 @@ export default class SeriesPickCtrl {
   }
 
   get confirmButtonText(): string {
-    if (this.isWaiting) {
+    if (this.isWaiting && !this.isSelecting) {
       return 'Waiting for opponent...';
     }
     const count = this.currentSelections.size;
@@ -584,7 +631,7 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       return `Confirm (${count}/${max})`;
     } else if (this.isSelecting) {
-      return count > 0 ? 'Select Opening' : 'Select an Opening';
+      return count > 0 ? 'Confirm' : 'Select an Opening';
     }
     return 'Confirm';
   }
@@ -603,6 +650,9 @@ export default class SeriesPickCtrl {
   }
 
   get canCancel(): boolean {
+    if (this.isSelecting) {
+      return this.myConfirmed; // Cancel within 3s window
+    }
     return this.myConfirmed && !this.opponentConfirmed;
   }
 

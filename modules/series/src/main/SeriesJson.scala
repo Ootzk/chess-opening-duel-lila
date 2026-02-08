@@ -69,8 +69,11 @@ final class SeriesJson(
       "score" -> p.displayScore,
       "confirmedPicks" -> p.confirmedPicks,
       "confirmedBans" -> p.confirmedBans,
+      "confirmedSelecting" -> p.confirmedSelecting,
       "isOnline" -> p.isOnline
-    ).add("user" -> user.map(u =>
+    )
+    .add("selectingPick" -> p.selectingPick)
+    .add("user" -> user.map(u =>
       Json.obj("id" -> u.id, "name" -> u.name)
         .add("title" -> u.title.map(_.value))
     ))

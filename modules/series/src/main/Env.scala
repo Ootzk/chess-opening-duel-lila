@@ -53,7 +53,9 @@ final class Env(
       s.phase match
         case Series.Phase.Banning =>
           timeouts.schedule(s.id) // Reschedule for Banning phase
-        case Series.Phase.RandomSelecting | Series.Phase.Playing | Series.Phase.Selecting | Series.Phase.Finished =>
+        case Series.Phase.Selecting =>
+          timeouts.schedule(s.id) // Schedule timeout for Selecting phase (DC → forfeit)
+        case Series.Phase.RandomSelecting | Series.Phase.Playing | Series.Phase.Finished =>
           timeouts.cancel(s.id) // Cancel timeout when game starts
         case _ => ()
 

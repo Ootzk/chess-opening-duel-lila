@@ -28,6 +28,8 @@ export interface SeriesPlayer {
   score: number;
   confirmedPicks: boolean;
   confirmedBans: boolean;
+  confirmedSelecting: boolean;
+  selectingPick?: string;
   isOnline: boolean;
   user?: {
     id: string;

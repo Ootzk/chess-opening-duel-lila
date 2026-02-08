@@ -35,6 +35,7 @@ export function initModule(config: PickConfig): void {
       phase: (d: { phase: number; gameId?: string }) => ctrl.handlePhase(d),
       gone: (d: { player: number; gone: boolean }) => ctrl.handleGone(d),
       aborted: () => ctrl.handleAborted(),
+      selectingPick: (d: { name: string | null }) => ctrl.handleSelectingPick(d),
       rematchOffer: (d: { player: number }) => ctrl.handleRematchOffer(d),
       rematchTaken: (d: { newSeriesId: string }) => ctrl.handleRematchTaken(d),
     },

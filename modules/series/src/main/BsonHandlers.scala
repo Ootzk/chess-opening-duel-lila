@@ -86,8 +86,10 @@ object BsonHandlers:
         score = doc.getAsOpt[Int]("s").getOrElse(0)
         confirmedPicks = doc.getAsOpt[Boolean]("cp").getOrElse(false)
         confirmedBans = doc.getAsOpt[Boolean]("cb").getOrElse(false)
+        confirmedSelecting = doc.getAsOpt[Boolean]("cs").getOrElse(false)
+        selectingPick = doc.getAsOpt[String]("sp")
         lastSeenAt = doc.getAsOpt[Instant]("ls")
-      yield SeriesPlayer(userId, index, score, confirmedPicks, confirmedBans, lastSeenAt)
+      yield SeriesPlayer(userId, index, score, confirmedPicks, confirmedBans, confirmedSelecting, selectingPick, lastSeenAt)
 
     def writeTry(p: SeriesPlayer) = scala.util.Success($doc(
       "u"  -> p.userId,
@@ -95,6 +97,8 @@ object BsonHandlers:
       "s"  -> p.score,
       "cp" -> p.confirmedPicks,
       "cb" -> p.confirmedBans,
+      "cs" -> p.confirmedSelecting,
+      "sp" -> p.selectingPick,
       "ls" -> p.lastSeenAt
     ))
 

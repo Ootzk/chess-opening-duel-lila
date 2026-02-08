@@ -71,6 +71,16 @@ final class SeriesSocket(
       )
     )
 
+  /** Notify selecting pick change (real-time sync during Selecting phase) */
+  def notifySelectingPick(seriesId: SeriesId, openingName: Option[String]): Unit =
+    rooms.tell(
+      seriesId.into(RoomId),
+      NotifyVersion(
+        "selectingPick",
+        Json.obj("name" -> openingName)
+      )
+    )
+
   /** Notify player gone/back status to the room */
   def notifyGone(seriesId: SeriesId, playerIndex: Int, gone: Boolean): Unit =
     rooms.tell(

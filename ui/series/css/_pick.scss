@@ -73,6 +73,13 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    // Opponent's real-time selection during Selecting phase
+    &.opponent-selecting {
+      border-color: $c-accent;
+      border-style: dashed;
+      box-shadow: 0 0 8px rgba($c-accent, 0.4);
+    }
   }
 
   &__board {

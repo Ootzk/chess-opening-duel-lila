@@ -12,39 +12,11 @@ export default function view(ctrl: SeriesPickCtrl): VNode {
   if (ctrl.isRandomSelecting) {
     return renderRandomSelecting(ctrl);
   }
-  // Selecting phase: 승자는 대기 화면, 패자는 선택 화면
-  if (ctrl.isSelecting && ctrl.isWaitingForOpponentSelect) {
-    return renderWaitingForOpponentSelect(ctrl);
-  }
+  // Unified view: both players see the same grid (including Selecting phase)
   return h('div.series-pick', [
     renderHeader(ctrl),
     renderGrid(ctrl),
     renderFooter(ctrl),
-  ]);
-}
-
-// Selecting phase: 승자가 패자의 선택을 기다리는 화면
-function renderWaitingForOpponentSelect(ctrl: SeriesPickCtrl): VNode {
-  return h('div.series-pick.selecting-waiting', [
-    h('div.series-pick__header', [
-      h('h1', 'Opponent Selecting'),
-      h('div.series-pick__timer', { class: { hurry: ctrl.timeLeft <= 10 } }, [
-        h('span.timer-display', String(ctrl.timeLeft)),
-      ]),
-    ]),
-    h('div.series-pick__waiting-container', [
-      h('div.series-pick__waiting-message', [
-        h('span.ddloader'),
-        h('span', 'Waiting for opponent to select opening...'),
-      ]),
-    ]),
-    h('div.series-pick__footer', [
-      h('div.series-pick__actions'),
-      h('div.series-pick__chat.mchat', [
-        h('div.mchat__tabs', [h('div.mchat__tab', '\u00a0')]),
-        h('div.mchat__content'),
-      ]),
-    ]),
   ]);
 }
 
@@ -160,7 +132,10 @@ function renderGrid(ctrl: SeriesPickCtrl): VNode {
 function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
   const isSelected = ctrl.isSelected(preset.name);
   const canSelect = ctrl.canSelect(preset.name);
-  const isDisabled = ctrl.myConfirmed || (!isSelected && !canSelect);
+  const isOpponentSelecting = ctrl.isSelecting && !ctrl.isMyTurnToSelect && preset.name === ctrl.opponentSelectingPick;
+  const isDisabled = ctrl.isSelecting
+    ? !ctrl.isMyTurnToSelect || ctrl.myConfirmed  // Winner can't click; confirmed loser can't click
+    : ctrl.myConfirmed || (!isSelected && !canSelect);
 
   return h(
     'div.series-pick__opening',
@@ -170,6 +145,7 @@ function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
         disabled: isDisabled,
         'my-pick': isSelected && ctrl.isPicking,
         'my-ban': isSelected && ctrl.isBanning,
+        'opponent-selecting': isOpponentSelecting,
       },
       attrs: {
         'data-name': preset.name,
@@ -215,7 +191,23 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
 
   // Left side: Confirm or Cancel button
   const buttonClass = ctrl.isBanning ? 'button.button.button-red' : 'button.button.button-green';
-  if (ctrl.isWaiting) {
+
+  if (ctrl.isSelecting && !ctrl.isMyTurnToSelect) {
+    // Winner: no buttons, just watching
+  } else if (ctrl.isSelecting && ctrl.myConfirmed) {
+    // Loser confirmed: show Cancel button
+    leftSide.push(
+      h(
+        'button.button.button-metal.series-pick__action-btn',
+        {
+          on: {
+            click: () => ctrl.cancelConfirm(),
+          },
+        },
+        'Cancel',
+      ),
+    );
+  } else if (ctrl.isWaiting) {
     leftSide.push(
       h(
         'button.button.button-metal.series-pick__action-btn',
@@ -244,22 +236,37 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
     );
   }
 
-  // Right side: Opponent status (only in pick/ban phases)
-  if (ctrl.isPicking || ctrl.isBanning) {
+  // Right side: Opponent status
+  if (ctrl.isPicking || ctrl.isBanning || ctrl.isSelecting) {
     const povIndex = ctrl.series.povIndex ?? 0;
     const oppIndex = 1 - povIndex;
     const opponent = ctrl.series.players[oppIndex];
     const oppUser = opponent?.user;
-    const statusClass = ctrl.opponentConfirmed ? 'ready' : 'waiting';
+
+    let statusText: string;
+    let statusClass: string;
+
+    if (ctrl.isSelecting) {
+      if (ctrl.isMyTurnToSelect) {
+        // I'm the loser selecting — show opponent (winner) status
+        statusClass = 'waiting';
+        statusText = ' is watching...';
+      } else {
+        // I'm the winner — show opponent (loser) status
+        statusClass = ctrl.opponentConfirmed ? 'ready' : 'waiting';
+        statusText = ctrl.opponentConfirmed ? ' confirmed!' : ' is selecting...';
+      }
+    } else {
+      statusClass = ctrl.opponentConfirmed ? 'ready' : 'waiting';
+      statusText = ctrl.opponentConfirmed ? ' is Ready!' : ' is selecting...';
+    }
 
     rightSide.push(
       h(`div.series-pick__opponent-status.${statusClass}`, [
         oppUser
           ? userLink({ name: oppUser.name, title: oppUser.title, online: ctrl.opponentOnline, line: true })
           : h('span', `Player ${oppIndex + 1}`),
-        ctrl.opponentConfirmed
-          ? h('span.status-text', ' is Ready!')
-          : h('span.status-text', ' is selecting...'),
+        h('span.status-text', statusText),
       ]),
     );
   }

@@ -45,8 +45,9 @@ final class Series(env: Env) extends LilaController(env):
             // 상대의 픽을 표시
             s.picks(1 - povIndex).map(_.toPreset).toVector
           case lila.series.Series.Phase.Selecting =>
-            // 내 remaining picks만 표시 (사용된 픽과 밴된 픽 제외)
-            s.remainingPicks(povIndex).map(_.toPreset).toVector
+            // 양측 동일: 패자(selectingPlayer)의 remaining picks 표시
+            val selectingIdx = s.lastGameLoser.getOrElse(0)
+            s.remainingPicks(selectingIdx).map(_.toPreset).toVector
           case _ => OpeningPresets.all
         for
           json <- env.series.jsonView(s, Some(me.userId))
@@ -280,6 +281,53 @@ final class Series(env: Env) extends LilaController(env):
                       "opening" -> Json.obj("name" -> opening.name, "fen" -> opening.fen.value, "url" -> opening.url)
                     ))
                   case None => JsonBadRequest(jsonError("Cannot select opening"))
+  }
+
+  // 실시간 선택 동기화 (Selecting phase, DB 저장 없음)
+  def setSelectingPick(id: SeriesId) = AuthBody(parse.json) { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        fuccess(JsonBadRequest(jsonError("Not a player of this series")))
+      else
+        val name = ctx.body.body.asOpt[String]
+        api.setSelectingPick(id, me.userId, name).map:
+          case Some(_) => JsonOk(Json.obj("ok" -> true))
+          case None => JsonBadRequest(jsonError("Cannot set selecting pick"))
+  }
+
+  // Selecting phase confirm (3초 delay 후 게임 생성)
+  def confirmSelecting(id: SeriesId) = AuthBody(parse.json) { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        fuccess(JsonBadRequest(jsonError("Not a player of this series")))
+      else
+        ctx.body.body.asOpt[String] match
+          case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
+          case Some(name) =>
+            api.confirmSelectingPick(id, me.userId, name).map:
+              case Some(updated) =>
+                val myIdx = updated.playerIndex(me.userId).get
+                JsonOk(Json.obj(
+                  "ok" -> true,
+                  "confirmedSelecting" -> updated.player(myIdx).confirmedSelecting
+                ))
+              case None => JsonBadRequest(jsonError("Cannot confirm selecting"))
+  }
+
+  // Selecting phase cancel confirm
+  def cancelConfirmSelecting(id: SeriesId) = Auth { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        JsonBadRequest(jsonError("Not a player of this series"))
+      else
+        api.cancelConfirmSelecting(id, me.userId).map:
+          case Some(updated) =>
+            val myIdx = updated.playerIndex(me.userId).get
+            JsonOk(Json.obj(
+              "ok" -> true,
+              "confirmedSelecting" -> updated.player(myIdx).confirmedSelecting
+            ))
+          case None => JsonBadRequest(jsonError("Cannot cancel confirm"))
   }
 
   // 시리즈 포기 (전체 시리즈를 presser 패배로 종료)

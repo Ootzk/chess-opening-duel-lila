@@ -37,6 +37,12 @@ final class SeriesRepo(val coll: Coll)(using Executor):
     val field = s"p$playerIndex.cb"
     coll.update.one($id(id), $set(field -> confirmed)).void
 
+  /** Atomically set confirmedSelecting and selectingPick for a specific player */
+  def setConfirmedSelecting(id: SeriesId, playerIndex: Int, confirmed: Boolean, pick: Option[String] = None): Funit =
+    val csField = s"p$playerIndex.cs"
+    val spField = s"p$playerIndex.sp"
+    coll.update.one($id(id), $set(csField -> confirmed, spField -> pick)).void
+
   /** Atomically set phase and phaseStartedAt, only if current phase matches expected.
     * Returns true if the update was applied (i.e., phase was still as expected).
     */
