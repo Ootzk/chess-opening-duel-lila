@@ -1,6 +1,6 @@
 package lila.series
 
-import akka.actor.Scheduler
+import akka.actor.{ Cancellable, Scheduler }
 import scala.concurrent.duration.*
 import chess.Clock.Config as ClockConfig
 import chess.format.Fen
@@ -20,6 +20,9 @@ final class SeriesApi(
 )(using Executor, lila.core.game.IdGenerator):
 
   import lila.core.game.Game
+
+  // Track scheduled confirm-delay tasks so they can be cancelled
+  private val confirmDelaySchedules = scalalib.ConcurrentMap[SeriesId, Cancellable](64)
 
   def create(
       player0: UserId,
@@ -116,8 +119,10 @@ final class SeriesApi(
                 repo.byId(seriesId).map:
                   case Some(updated) =>
                     if updated.bothPicksConfirmed then
-                      scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                      val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                        confirmDelaySchedules.remove(seriesId)
                         transitionToPhase(seriesId, Series.Phase.Banning)
+                      confirmDelaySchedules.put(seriesId, cancellable)
                     Some(updated)
                   case None => None
 
@@ -133,6 +138,7 @@ final class SeriesApi(
             else
               // Atomic: only unset this player's confirm flag
               repo.setConfirmedPicks(seriesId, idx, false).flatMap: _ =>
+                confirmDelaySchedules.remove(seriesId).foreach(_.cancel())
                 socketNotifyCancelConfirmed(seriesId, idx, "picks")
                 repo.byId(seriesId).map(_.orElse(Some(s)))
 
@@ -192,8 +198,10 @@ final class SeriesApi(
                 repo.byId(seriesId).map:
                   case Some(updated) =>
                     if updated.bothBansConfirmed then
-                      scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                      val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                        confirmDelaySchedules.remove(seriesId)
                         startGame1Delayed(seriesId)
+                      confirmDelaySchedules.put(seriesId, cancellable)
                     Some(updated)
                   case None => None
 
@@ -209,6 +217,7 @@ final class SeriesApi(
             else
               // Atomic: only unset this player's confirm flag
               repo.setConfirmedBans(seriesId, idx, false).flatMap: _ =>
+                confirmDelaySchedules.remove(seriesId).foreach(_.cancel())
                 socketNotifyCancelConfirmed(seriesId, idx, "bans")
                 repo.byId(seriesId).map(_.orElse(Some(s)))
 
@@ -388,8 +397,10 @@ final class SeriesApi(
                 case Some(_) =>
                   repo.setConfirmedSelecting(seriesId, idx, true, Some(presetName)).flatMap: _ =>
                     socketNotifyConfirmed(seriesId, idx, "selecting")
-                    scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                    val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                      confirmDelaySchedules.remove(seriesId)
                       startSelectingDelayed(seriesId)
+                    confirmDelaySchedules.put(seriesId, cancellable)
                     repo.byId(seriesId).map(_.orElse(Some(s)))
 
   /** Cancel selecting confirm — 3초 이내 취소 */
@@ -403,6 +414,7 @@ final class SeriesApi(
             if s.phase != Series.Phase.Selecting then fuccess(None)
             else if !s.player(idx).confirmedSelecting then fuccess(Some(s))
             else
+              confirmDelaySchedules.remove(seriesId).foreach(_.cancel())
               repo.setConfirmedSelecting(seriesId, idx, false, None).flatMap: _ =>
                 socketNotifyCancelConfirmed(seriesId, idx, "selecting")
                 repo.byId(seriesId).map(_.orElse(Some(s)))

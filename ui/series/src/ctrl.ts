@@ -26,6 +26,11 @@ export default class SeriesPickCtrl {
   // Selecting phase: opponent's real-time pick (via WS)
   opponentSelectingPick: string | null = null;
 
+  // 3-second countdown after both confirm (pick/ban) or selecting confirm
+  countdownActive: boolean = false;
+  countdownSeconds: number = 3;
+  countdownInterval?: number;
+
   // RandomSelecting phase state
   selectedOpening: SeriesOpening | null = null;
   randomSelectingCountdown: number = 5;
@@ -68,6 +73,10 @@ export default class SeriesPickCtrl {
         this.onTimeout();
       } else {
         this.startTimer();
+      }
+      // If page loaded with both confirmed (e.g. refresh during 3s window), start countdown
+      if (this.isBothConfirmed || (this.isSelecting && this.myConfirmed)) {
+        this.startCountdown();
       }
     }
   }
@@ -241,8 +250,34 @@ export default class SeriesPickCtrl {
   }
 
   get isWaiting(): boolean {
-    // 본인이 확정했으면 Cancel 가능 (양측 모두 확정 후 3초 대기 중에도)
     return this.myConfirmed;
+  }
+
+  get isBothConfirmed(): boolean {
+    return (this.isPicking || this.isBanning) && this.myConfirmed && this.opponentConfirmed;
+  }
+
+  private startCountdown(): void {
+    if (this.countdownActive) return;
+    this.countdownActive = true;
+    this.countdownSeconds = 3;
+    this.countdownInterval = window.setInterval(() => {
+      this.countdownSeconds--;
+      if (this.countdownSeconds <= 0) {
+        this.stopCountdown();
+      }
+      this.redraw();
+    }, 1000);
+    this.redraw();
+  }
+
+  private stopCountdown(): void {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = undefined;
+    }
+    this.countdownActive = false;
+    this.countdownSeconds = 3;
   }
 
   // Selecting phase: 상대가 선택 중인지 (내가 승자인지)
@@ -391,7 +426,10 @@ export default class SeriesPickCtrl {
         if (response.ok) {
           const data = await response.json();
           this.myConfirmed = data.confirmedSelecting ?? true;
-          // Don't redirect — 3s delay, then WS "phase" event triggers redirect
+          // Start 3s countdown — WS "phase" event triggers redirect when server creates game
+          if (this.myConfirmed) {
+            this.startCountdown();
+          }
         }
       } catch (e) {
         console.error('Error confirming selecting:', e);
@@ -431,7 +469,10 @@ export default class SeriesPickCtrl {
             return;
           }
         }
-        // WebSocket will notify us when opponent confirms
+        // Both confirmed → start 3s countdown
+        if (this.isBothConfirmed && !this.countdownActive) {
+          this.startCountdown();
+        }
       }
     } catch (e) {
       console.error('Error confirming:', e);
@@ -452,6 +493,20 @@ export default class SeriesPickCtrl {
     const povIndex = this.series.povIndex ?? 0;
     if (data.player !== povIndex) {
       this.opponentConfirmed = data.confirmed !== false;
+      // Start or stop countdown based on both-confirmed state
+      if (this.isBothConfirmed && !this.countdownActive) {
+        this.startCountdown();
+      } else if (!this.isBothConfirmed && this.countdownActive) {
+        this.stopCountdown();
+      }
+      // Selecting: winner sees countdown when loser confirms
+      if (this.isSelecting && this.isWaitingForOpponentSelect) {
+        if (this.opponentConfirmed && !this.countdownActive) {
+          this.startCountdown();
+        } else if (!this.opponentConfirmed && this.countdownActive) {
+          this.stopCountdown();
+        }
+      }
       this.redraw();
     } else if (data.phase === 'selecting') {
       // My own confirm/cancel echoed back
@@ -578,6 +633,7 @@ export default class SeriesPickCtrl {
 
   async cancelConfirm(): Promise<void> {
     if (!this.myConfirmed) return;
+    this.stopCountdown();
 
     if (this.isSelecting) {
       try {
@@ -621,6 +677,13 @@ export default class SeriesPickCtrl {
   }
 
   get confirmButtonText(): string {
+    if (this.countdownActive) {
+      if (this.isPicking) {
+        return `Ban phase starting in ${this.countdownSeconds}...`;
+      }
+      const round = this.series.games.length + 1;
+      return `Game ${round} starting in ${this.countdownSeconds}...`;
+    }
     if (this.isWaiting && !this.isSelecting) {
       return 'Waiting for opponent...';
     }
@@ -650,16 +713,14 @@ export default class SeriesPickCtrl {
   }
 
   get canCancel(): boolean {
-    if (this.isSelecting) {
-      return this.myConfirmed; // Cancel within 3s window
-    }
-    return this.myConfirmed && !this.opponentConfirmed;
+    return this.myConfirmed;
   }
 
   destroy(): void {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
     }
+    this.stopCountdown();
   }
 
   // RandomSelecting phase methods

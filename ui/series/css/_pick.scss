@@ -356,9 +356,18 @@
   text-align: center;
 }
 
+// Countdown text during 3s confirm delay (second line inside opponent-status)
+.series-pick__countdown-text {
+  width: 100%;
+  font-size: 1em;
+  font-weight: bold;
+  color: $c-font-dim;
+}
+
 // Opponent status display
 .series-pick__opponent-status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.3rem;
   font-size: 0.95rem;

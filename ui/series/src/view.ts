@@ -193,43 +193,24 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
   const buttonClass = ctrl.isBanning ? 'button.button.button-red' : 'button.button.button-green';
 
   if (ctrl.isSelecting && !ctrl.isMyTurnToSelect) {
-    // Winner: no buttons, just watching
-  } else if (ctrl.isSelecting && ctrl.myConfirmed) {
-    // Loser confirmed: show Cancel button
-    leftSide.push(
-      h(
-        'button.button.button-metal.series-pick__action-btn',
-        {
-          on: {
-            click: () => ctrl.cancelConfirm(),
-          },
-        },
-        'Cancel',
-      ),
-    );
+    // Winner: no button (just watches)
   } else if (ctrl.isWaiting) {
+    // Confirmed (with or without countdown): show Cancel button
     leftSide.push(
       h(
         'button.button.button-metal.series-pick__action-btn',
-        {
-          on: {
-            click: () => ctrl.cancelConfirm(),
-          },
-        },
+        { on: { click: () => ctrl.cancelConfirm() } },
         'Cancel',
       ),
     );
   } else {
+    // Not confirmed: show Confirm button
     leftSide.push(
       h(
         `${buttonClass}.series-pick__action-btn`,
         {
-          attrs: {
-            disabled: !ctrl.canConfirm,
-          },
-          on: {
-            click: () => ctrl.confirm(),
-          },
+          attrs: { disabled: !ctrl.canConfirm },
+          on: { click: () => ctrl.confirm() },
         },
         ctrl.confirmButtonText,
       ),
@@ -261,14 +242,19 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
       statusText = ctrl.opponentConfirmed ? ' is Ready!' : ' is selecting...';
     }
 
-    rightSide.push(
-      h(`div.series-pick__opponent-status.${statusClass}`, [
-        oppUser
-          ? userLink({ name: oppUser.name, title: oppUser.title, online: ctrl.opponentOnline, line: true })
-          : h('span', `Player ${oppIndex + 1}`),
-        h('span.status-text', statusText),
-      ]),
-    );
+    const statusChildren: VNode[] = [
+      oppUser
+        ? userLink({ name: oppUser.name, title: oppUser.title, online: ctrl.opponentOnline, line: true })
+        : h('span', `Player ${oppIndex + 1}`),
+      h('span.status-text', statusText),
+    ];
+
+    // Second line: countdown text when both confirmed
+    if (ctrl.countdownActive) {
+      statusChildren.push(h('div.series-pick__countdown-text', ctrl.confirmButtonText));
+    }
+
+    rightSide.push(h(`div.series-pick__opponent-status.${statusClass}`, statusChildren));
   }
 
   return h('div.series-pick__actions', [
