@@ -76,6 +76,7 @@ final class SeriesJson(
     .add("user" -> user.map(u =>
       Json.obj("id" -> u.id, "name" -> u.name)
         .add("title" -> u.title.map(_.value))
+        .add("flair" -> u.flair)
     ))
 
   private def openingJson(o: SeriesOpening): JsObject = Json.obj(

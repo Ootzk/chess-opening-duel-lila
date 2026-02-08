@@ -35,6 +35,7 @@ export interface SeriesPlayer {
     id: string;
     name: string;
     title?: string;
+    flair?: Flair;
   };
 }
 

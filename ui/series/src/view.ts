@@ -1,7 +1,7 @@
 import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type SeriesPickCtrl from './ctrl';
-import type { OpeningPreset, SeriesOpening, SeriesGame } from './interfaces';
+import type { OpeningPreset, SeriesOpening, SeriesGame, SeriesPlayer } from './interfaces';
 import { getOpponentBans, getMyBans, getNeutralOpening } from './interfaces';
 import { userLink } from 'lib/view/userLink';
 
@@ -281,30 +281,24 @@ function renderFinishedHeader(ctrl: SeriesPickCtrl): VNode {
   const winnerIdx = ctrl.series.winner;
   const iWon = winnerIdx === povIndex;
 
-  // Determine winner/loser for display order (winner on left)
-  const winner = winnerIdx !== undefined ? ctrl.series.players[winnerIdx] : myPlayer;
-  const loser = winnerIdx !== undefined ? ctrl.series.players[1 - winnerIdx] : oppPlayer;
-  const winnerOnline = winnerIdx === povIndex ? true : ctrl.opponentOnline;
-  const loserOnline = winnerIdx === povIndex ? ctrl.opponentOnline : true;
-
   const bannerClass = iWon ? 'victory' : 'defeat';
   const bannerText = iWon ? 'Victory!' : 'Defeat';
 
   return h('div.series-finished__header', [
     h(`div.series-finished__result-banner.${bannerClass}`, bannerText),
     h('div.series-finished__players', [
-      renderPlayerScore(winner, winnerOnline),
+      renderPlayerScore(myPlayer, true),
       h('div.series-finished__vs', 'vs'),
-      renderPlayerScore(loser, loserOnline),
+      renderPlayerScore(oppPlayer, ctrl.opponentOnline),
     ]),
   ]);
 }
 
-function renderPlayerScore(player: { user?: { name: string; title?: string; id: string }; score: number; isOnline: boolean }, online: boolean): VNode {
+function renderPlayerScore(player: SeriesPlayer, online: boolean): VNode {
   const user = player.user;
   return h('div.series-finished__player', [
     user
-      ? userLink({ name: user.name, title: user.title, online, line: true })
+      ? userLink({ name: user.name, title: user.title, flair: user.flair, online, line: true })
       : h('span', 'Anonymous'),
     h('div.series-finished__score', String(player.score)),
   ]);
@@ -327,8 +321,18 @@ function renderFinishedScoreTable(ctrl: SeriesPickCtrl): VNode {
       h('thead', [
         h('tr', [
           h('th.series-score__header-game', 'Game'),
-          h('th.series-score__header-me', myUser ? myUser.name : `Player ${povIndex + 1}`),
-          h('th.series-score__header-opp', oppUser ? oppUser.name : `Player ${oppIndex + 1}`),
+          h(
+            'th.series-score__header-me',
+            myUser
+              ? userLink({ name: myUser.name, title: myUser.title, flair: myUser.flair, online: false, line: false })
+              : `Player ${povIndex + 1}`,
+          ),
+          h(
+            'th.series-score__header-opp',
+            oppUser
+              ? userLink({ name: oppUser.name, title: oppUser.title, flair: oppUser.flair, online: false, line: false })
+              : `Player ${oppIndex + 1}`,
+          ),
           h('th.series-score__header-opening', 'Opening'),
         ]),
       ]),
