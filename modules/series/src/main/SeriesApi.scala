@@ -298,7 +298,8 @@ final class SeriesApi(
     repo.byId(seriesId).flatMap:
       case None => funit
       case Some(s) =>
-        s.games.find(_.gameId == gameId) match
+        if s.isFinished || s.isAborted then funit // forfeit로 이미 종료됨
+        else s.games.find(_.gameId == gameId) match
           case None => funit
           case Some(seriesGame) =>
             val winnerIndex = winnerId.flatMap(s.playerIndex)
@@ -462,6 +463,25 @@ final class SeriesApi(
                 startGame1(withNeutral)
               else repo.update(updated).inject(Some(updated))
 
+  def forfeitSeries(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        if s.isFinished || s.isAborted then fuccess(None)
+        else
+          s.playerIndex(userId) match
+            case None => fuccess(None)
+            case Some(loserIdx) =>
+              val forfeited = s.copy(
+                forfeitBy = Some(loserIdx),
+                phase = Series.Phase.Finished,
+                status = Series.Status.Finished,
+                finishedAt = Some(nowInstant)
+              )
+              repo.update(forfeited).map: _ =>
+                Bus.pub(SeriesForfeited(forfeited))
+                Some(forfeited)
+
   private def abortSeries(s: Series): Fu[Option[Series]] =
     val aborted = s.copy(
       status = Series.Status.Aborted,
@@ -611,6 +631,7 @@ final class SeriesApi(
 // Events
 case class SeriesCreated(s: Series)
 case class SeriesAborted(s: Series)
+case class SeriesForfeited(s: Series)
 case class SeriesFinished(s: Series)
 case class SeriesGameFinished(s: Series, gameId: GameId, winnerId: Option[UserId])
 case class SeriesEnterSelecting(s: Series, oldGameId: GameId)

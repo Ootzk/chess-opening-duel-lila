@@ -282,6 +282,17 @@ final class Series(env: Env) extends LilaController(env):
                   case None => JsonBadRequest(jsonError("Cannot select opening"))
   }
 
+  // 시리즈 포기 (전체 시리즈를 presser 패배로 종료)
+  def forfeit(id: SeriesId) = Auth { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        JsonBadRequest(jsonError("Not a player of this series"))
+      else
+        api.forfeitSeries(id, me.userId).map:
+          case Some(_) => JsonOk(Json.obj("ok" -> true))
+          case None => JsonBadRequest(jsonError("Cannot forfeit"))
+  }
+
   // Selecting 타임아웃 시 랜덤 선택 (패자용)
   def selectRandomOpening(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>

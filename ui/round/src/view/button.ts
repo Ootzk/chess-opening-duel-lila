@@ -158,6 +158,15 @@ export const resignConfirm = (ctrl: RoundController): VNode =>
     fbtCancel(ctrl.resign),
   ]);
 
+export const seriesForfeitConfirm = (ctrl: RoundController): VNode =>
+  hl('div.act-confirm', [
+    hl('button.fbt.yes', {
+      attrs: { title: 'Forfeit series', 'data-icon': licon.X },
+      hook: bind('click', () => ctrl.seriesForfeit(true)),
+    }),
+    fbtCancel(ctrl.seriesForfeit),
+  ]);
+
 export const drawConfirm = (ctrl: RoundController): VNode =>
   hl('div.act-confirm', [
     hl('button.fbt.yes.draw-yes', {

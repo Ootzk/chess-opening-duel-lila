@@ -485,6 +485,7 @@ POST  /series/$id<\w{8}>/cancelConfirmBans    controllers.Series.cancelConfirmBa
 POST  /series/$id<\w{8}>/timeoutBans          controllers.Series.timeoutBans(id: SeriesId)
 POST  /series/$id<\w{8}>/selectOpening        controllers.Series.selectNextOpening(id: SeriesId)
 POST  /series/$id<\w{8}>/selectRandom         controllers.Series.selectRandomOpening(id: SeriesId)
+POST  /series/$id<\w{8}>/forfeit              controllers.Series.forfeit(id: SeriesId)
 
 # Simul
 GET   /simul                                  controllers.Simul.home

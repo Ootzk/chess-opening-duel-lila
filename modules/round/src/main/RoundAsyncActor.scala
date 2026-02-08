@@ -310,6 +310,14 @@ final private class RoundAsyncActor(
         publish:
           chess.ByColor(color => Event.SeriesRandomSelectingRedirect(color, seriesId)).toList
 
+    // Series: forfeit으로 인한 게임 종료 (resign 또는 abort)
+    case lila.game.actorApi.NotifySeriesForfeited(_, loserColor) =>
+      handle: game =>
+        if game.playable then
+          if game.abortable then finisher.abortForce(game)
+          else finisher.other(game, _.Resign, Some(!loserColor))
+        else fuccess(Nil)
+
     case Moretime(playerId, duration, force) =>
       handle(playerId): pov =>
         moretimer(pov, duration, force).flatMapz: progress =>

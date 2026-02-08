@@ -18,7 +18,8 @@ case class Series(
     variant: chess.variant.Variant,
     clock: ClockConfig,
     createdAt: Instant,
-    finishedAt: Option[Instant] = None
+    finishedAt: Option[Instant] = None,
+    forfeitBy: Option[Int] = None
 ):
   // ===== 플레이어 접근 =====
 
@@ -48,14 +49,15 @@ case class Series(
   def isAborted: Boolean    = status == Series.Status.Aborted
   def isNotFinished: Boolean = !isFinished && !isAborted
 
-  // Winner: must have higher score AND at least pointsNeeded (2.5)
+  // Winner: forfeit overrides score, otherwise must have higher score AND at least pointsNeeded (2.5)
   // Tie at 2.5-2.5 means sudden death continues
   def winner: Option[Int] =
-    val dominated = players._1.score > players._2.score && players._1.score >= Series.pointsNeeded
-    val dominated2 = players._2.score > players._1.score && players._2.score >= Series.pointsNeeded
-    if dominated then Some(0)
-    else if dominated2 then Some(1)
-    else None
+    forfeitBy.map(1 - _).orElse:
+      val dominated = players._1.score > players._2.score && players._1.score >= Series.pointsNeeded
+      val dominated2 = players._2.score > players._1.score && players._2.score >= Series.pointsNeeded
+      if dominated then Some(0)
+      else if dominated2 then Some(1)
+      else None
 
   def hasEnded: Boolean = winner.isDefined
 

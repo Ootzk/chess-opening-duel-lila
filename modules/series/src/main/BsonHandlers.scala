@@ -155,7 +155,8 @@ object BsonHandlers:
         variant = r.get[chess.variant.Variant]("va"),
         clock = r.get[chess.Clock.Config]("cl"),
         createdAt = r.get[Instant]("ca"),
-        finishedAt = r.getO[Instant]("fa")
+        finishedAt = r.getO[Instant]("fa"),
+        forfeitBy = r.getO[Int]("fb")
       )
 
     def writes(w: BSON.Writer, s: Series) = $doc(
@@ -170,5 +171,6 @@ object BsonHandlers:
       "va" -> s.variant,
       "cl" -> s.clock,
       "ca" -> s.createdAt,
-      "fa" -> s.finishedAt
+      "fa" -> s.finishedAt,
+      "fb" -> s.forfeitBy
     )

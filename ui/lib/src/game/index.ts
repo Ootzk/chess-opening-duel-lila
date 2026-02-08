@@ -15,7 +15,8 @@ export const isPlayerPlaying = (data: GameData): boolean => playable(data) && !d
 export const isPlayerTurn = (data: GameData): boolean =>
   isPlayerPlaying(data) && data.game.player === data.player.color;
 
-export const mandatory = (data: GameData): boolean => !!data.tournament || !!data.simul || !!data.swiss;
+export const mandatory = (data: GameData): boolean =>
+  !!data.tournament || !!data.simul || !!data.swiss || !!data.series;
 
 export const playedTurns = (data: GameData): number => data.game.turns - (data.game.startedAtTurn || 0);
 

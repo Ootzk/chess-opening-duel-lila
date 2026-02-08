@@ -4,6 +4,7 @@ import { render as renderReplay, analysisButton } from './replay';
 import renderExpiration from './expiration';
 import { userHtml } from './user';
 import * as button from './button';
+import { justIcon } from '../util';
 import type RoundController from '../ctrl';
 import { type LooseVNodes, hl, bind, toggleButton as boardMenuToggleButton } from 'lib/view';
 import { anyClockView } from './clock';
@@ -60,6 +61,41 @@ const prompt = (ctrl: RoundController) => {
   };
 };
 
+const drawButton = (ctrl: RoundController) =>
+  !!ctrl.drawConfirm
+    ? button.drawConfirm(ctrl)
+    : ctrl.data.game.threefold
+      ? button.claimThreefold(ctrl, d => {
+          const threefoldable = drawableSwiss(d);
+          return {
+            enabled: threefoldable,
+            overrideHint: threefoldable ? undefined : i18n.site.noDrawBeforeSwissLimit,
+          };
+        })
+      : button.standard(
+          ctrl,
+          d => ({
+            enabled: ctrl.canOfferDraw(),
+            overrideHint: drawableSwiss(d) ? undefined : i18n.site.noDrawBeforeSwissLimit,
+          }),
+          licon.OneHalf,
+          i18n.site.offerDraw,
+          'draw-yes',
+          () => ctrl.offerDraw(true),
+        );
+
+const resignButton = (ctrl: RoundController) =>
+  !!ctrl.resignConfirm
+    ? button.resignConfirm(ctrl)
+    : button.standard(
+        ctrl,
+        d => ({ enabled: resignable(d) }),
+        licon.FlagOutline,
+        i18n.site.resign,
+        'resign',
+        () => ctrl.resign(true),
+      );
+
 export const renderTablePlay = (ctrl: RoundController): LooseVNodes => {
   const d = ctrl.data,
     loading = isLoading(ctrl),
@@ -67,51 +103,49 @@ export const renderTablePlay = (ctrl: RoundController): LooseVNodes => {
     icons =
       loading || isQuestion
         ? []
-        : [
-            abortable(d)
-              ? button.standard(ctrl, undefined, licon.X, i18n.site.abortGame, 'abort')
-              : button.standard(
-                  ctrl,
-                  d => ({ enabled: takebackable(d) }),
-                  licon.Back,
-                  i18n.site.proposeATakeback,
-                  'takeback-yes',
-                  ctrl.takebackYes,
-                ),
-            !!ctrl.drawConfirm
-              ? button.drawConfirm(ctrl)
-              : ctrl.data.game.threefold
-                ? button.claimThreefold(ctrl, d => {
-                    const threefoldable = drawableSwiss(d);
-                    return {
-                      enabled: threefoldable,
-                      overrideHint: threefoldable ? undefined : i18n.site.noDrawBeforeSwissLimit,
-                    };
-                  })
+        : d.series
+          ? [
+              // 시리즈 게임: 4개 버튼 (forfeit, takeback, draw, resign)
+              !!ctrl.seriesForfeitConfirm
+                ? button.seriesForfeitConfirm(ctrl)
+                : hl(
+                    'button.fbt.series-forfeit',
+                    {
+                      attrs: { title: 'Forfeit series' },
+                      hook: bind('click', () => ctrl.seriesForfeit(true)),
+                    },
+                    [hl('span', justIcon(licon.X))],
+                  ),
+              button.standard(
+                ctrl,
+                d => ({ enabled: takebackable(d) }),
+                licon.Back,
+                i18n.site.proposeATakeback,
+                'takeback-yes',
+                ctrl.takebackYes,
+              ),
+              drawButton(ctrl),
+              resignButton(ctrl),
+              analysisButton(ctrl),
+              boardMenuToggleButton(ctrl.menu, i18n.site.menu),
+            ]
+          : [
+              // 일반 게임: 기존 3개 버튼 (abort/takeback, draw, resign)
+              abortable(d)
+                ? button.standard(ctrl, undefined, licon.X, i18n.site.abortGame, 'abort')
                 : button.standard(
                     ctrl,
-                    d => ({
-                      enabled: ctrl.canOfferDraw(),
-                      overrideHint: drawableSwiss(d) ? undefined : i18n.site.noDrawBeforeSwissLimit,
-                    }),
-                    licon.OneHalf,
-                    i18n.site.offerDraw,
-                    'draw-yes',
-                    () => ctrl.offerDraw(true),
+                    d => ({ enabled: takebackable(d) }),
+                    licon.Back,
+                    i18n.site.proposeATakeback,
+                    'takeback-yes',
+                    ctrl.takebackYes,
                   ),
-            !!ctrl.resignConfirm
-              ? button.resignConfirm(ctrl)
-              : button.standard(
-                  ctrl,
-                  d => ({ enabled: resignable(d) }),
-                  licon.FlagOutline,
-                  i18n.site.resign,
-                  'resign',
-                  () => ctrl.resign(true),
-                ),
-            analysisButton(ctrl),
-            boardMenuToggleButton(ctrl.menu, i18n.site.menu),
-          ],
+              drawButton(ctrl),
+              resignButton(ctrl),
+              analysisButton(ctrl),
+              boardMenuToggleButton(ctrl.menu, i18n.site.menu),
+            ],
     buttons = loading
       ? [loader()]
       : [promptVNode, button.opponentGone(ctrl), button.threefoldSuggestion(ctrl)];
@@ -120,7 +154,12 @@ export const renderTablePlay = (ctrl: RoundController): LooseVNodes => {
     hl('div.rcontrols', [
       hl(
         'div.ricons',
-        { class: { confirm: !!(ctrl.drawConfirm || ctrl.resignConfirm), empty: !icons.length } },
+        {
+          class: {
+            confirm: !!(ctrl.drawConfirm || ctrl.resignConfirm || ctrl.seriesForfeitConfirm),
+            empty: !icons.length,
+          },
+        },
         icons,
       ),
       buttons,

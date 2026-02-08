@@ -62,6 +62,17 @@ final class Env(
     case SeriesAborted(s) =>
       socket.notifyAborted(s.id)
 
+  // Subscribe to series forfeited - resign current game via Bus event
+  Bus.sub[SeriesForfeited]:
+    case SeriesForfeited(s) =>
+      socket.reload(s.id)
+      s.currentGame.foreach: sg =>
+        s.forfeitBy.foreach: loserIdx =>
+          val loserColor =
+            if sg.whitePlayerIndex == loserIdx then chess.Color.White
+            else chess.Color.Black
+          Bus.pub(lila.game.actorApi.NotifySeriesForfeited(sg.gameId, loserColor))
+
   // Subscribe to game finish events
   Bus.sub[lila.core.game.FinishGame]:
     case lila.core.game.FinishGame(game, _) =>

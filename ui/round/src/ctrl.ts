@@ -78,6 +78,7 @@ export default class RoundController implements MoveRootCtrl {
   goneBerserk: GoneBerserk = {};
   resignConfirm?: Timeout = undefined;
   drawConfirm?: Timeout = undefined;
+  seriesForfeitConfirm?: Timeout = undefined;
   preventDrawOffer?: Timeout = undefined;
   // will be replaced by view layer
   autoScroll: () => void = () => {};
@@ -726,6 +727,32 @@ export default class RoundController implements MoveRootCtrl {
       this.resignConfirm = undefined;
       this.redraw();
     }
+  };
+
+  seriesForfeit = (v: boolean, immediately?: boolean): void => {
+    if (v) {
+      if (this.seriesForfeitConfirm || !this.data.pref.confirmResign || immediately) {
+        clearTimeout(this.seriesForfeitConfirm);
+        this.seriesForfeitConfirm = undefined;
+        this.performSeriesForfeit();
+      } else {
+        this.seriesForfeitConfirm = setTimeout(() => this.seriesForfeit(false), 3000);
+      }
+      this.redraw();
+    } else if (this.seriesForfeitConfirm) {
+      clearTimeout(this.seriesForfeitConfirm);
+      this.seriesForfeitConfirm = undefined;
+      this.redraw();
+    }
+  };
+
+  private performSeriesForfeit = (): void => {
+    const seriesId = this.data.series?.id;
+    if (!seriesId) return;
+    fetch(`/series/${seriesId}/forfeit`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
   };
 
   hasGoneBerserk = (color: Color): boolean => !!this.goneBerserk[color];
