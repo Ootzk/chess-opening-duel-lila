@@ -16,6 +16,7 @@ export default class SeriesPickCtrl {
   series: SeriesData;
   selectedPicks: Set<string> = new Set();
   selectedBans: Set<string> = new Set();
+  selectedSelectingPick: Set<string> = new Set();
   timeLeft: number;
   timerInterval?: number;
   myConfirmed: boolean = false;
@@ -239,11 +240,11 @@ export default class SeriesPickCtrl {
   }
 
   get currentSelections(): Set<string> {
-    return this.isPicking ? this.selectedPicks : this.selectedBans;
+    return this.isPicking ? this.selectedPicks : this.isSelecting ? this.selectedSelectingPick : this.selectedBans;
   }
 
   get maxSelections(): number {
-    return this.isPicking ? this.maxPicks : this.maxBans;
+    return this.isPicking ? this.maxPicks : this.isSelecting ? 1 : this.maxBans;
   }
 
   // Get openings that can be selected in current phase
@@ -306,6 +307,9 @@ export default class SeriesPickCtrl {
   }
 
   private async sendSelections(): Promise<void> {
+    // Selecting phase doesn't send intermediate selections; confirm handles it
+    if (this.isSelecting) return;
+
     const endpoint = this.isPicking
       ? `/series/${this.seriesId}/picks`
       : `/series/${this.seriesId}/bans`;
