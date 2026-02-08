@@ -22,6 +22,11 @@ final class SeriesRepo(val coll: Coll)(using Executor):
   def byGameId(gameId: GameId): Fu[Option[Series]] =
     coll.one[Series]($doc("gm.g" -> gameId))
 
+  /** Atomically update lastSeenAt for a specific player using $set */
+  def setLastSeen(id: SeriesId, playerIndex: Int): Funit =
+    val field = s"p$playerIndex.ls"
+    coll.update.one($id(id), $set(field -> nowInstant)).void
+
   // 두 플레이어로 가장 최근 생성된 series 찾기 (밴픽 리다이렉트용)
   def byPlayers(user1: UserId, user2: UserId): Fu[Option[Series]] =
     coll

@@ -48,14 +48,12 @@ final class SeriesApi(
             val updated = s.updatePlayer(idx, _.updateLastSeen)
             repo.update(updated).inject(Some(updated))
 
-  /** WebSocket ping - updates lastSeen for a specific player */
+  /** WebSocket ping - atomically updates lastSeen for a specific player.
+    * Uses $set to avoid read-modify-write race conditions with concurrent operations
+    * (setPicks, confirmPicks, etc.) that could overwrite lastSeenAt with stale values.
+    */
   def ping(seriesId: SeriesId, playerIndex: Int): Funit =
-    repo.byId(seriesId).flatMap:
-      case None => funit
-      case Some(s) if s.isNotFinished =>
-        val updated = s.updatePlayer(playerIndex, _.updateLastSeen)
-        repo.update(updated)
-      case _ => funit
+    repo.setLastSeen(seriesId, playerIndex)
 
   /** WebSocket gone - player connected/disconnected, notify opponent via socket */
   def setPlayerGone(seriesId: SeriesId, playerIndex: Int, gone: Boolean): Unit =
