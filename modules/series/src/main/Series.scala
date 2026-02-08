@@ -213,9 +213,7 @@ object Series:
   val pointsNeeded = 5  // 2.5 * 2 (internal: win=2, draw=1)
   val maxPicks = 5
   val maxBans = 2
-  // Test mode uses 5 second timeout, production uses 30 seconds
-  val phaseTimeout: Int =
-    if sys.env.getOrElse("LILA_TEST_MODE", "") == "1" then 5 else 30
+  val phaseTimeout: Int = 30
   val randomSelectingTimeout = 5 // seconds
   val bothConfirmedDelay = 3 // seconds - delay after both players confirm before phase transition
 
