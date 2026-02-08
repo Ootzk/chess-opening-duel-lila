@@ -27,6 +27,27 @@ final class SeriesRepo(val coll: Coll)(using Executor):
     val field = s"p$playerIndex.ls"
     coll.update.one($id(id), $set(field -> nowInstant)).void
 
+  /** Atomically set confirmedPicks for a specific player */
+  def setConfirmedPicks(id: SeriesId, playerIndex: Int, confirmed: Boolean): Funit =
+    val field = s"p$playerIndex.cp"
+    coll.update.one($id(id), $set(field -> confirmed)).void
+
+  /** Atomically set confirmedBans for a specific player */
+  def setConfirmedBans(id: SeriesId, playerIndex: Int, confirmed: Boolean): Funit =
+    val field = s"p$playerIndex.cb"
+    coll.update.one($id(id), $set(field -> confirmed)).void
+
+  /** Atomically set phase and phaseStartedAt, only if current phase matches expected.
+    * Returns true if the update was applied (i.e., phase was still as expected).
+    */
+  def setPhaseIfCurrent(id: SeriesId, expectedPhase: Series.Phase, newPhase: Series.Phase): Fu[Boolean] =
+    coll.update
+      .one(
+        $id(id) ++ $doc("ph" -> expectedPhase.id),
+        $set("ph" -> newPhase.id, "psa" -> nowInstant)
+      )
+      .dmap(_.nModified > 0)
+
   // 두 플레이어로 가장 최근 생성된 series 찾기 (밴픽 리다이렉트용)
   def byPlayers(user1: UserId, user2: UserId): Fu[Option[Series]] =
     coll

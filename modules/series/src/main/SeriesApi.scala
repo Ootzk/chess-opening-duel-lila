@@ -109,15 +109,17 @@ final class SeriesApi(
             else if s.picks(idx).isEmpty then fuccess(None)
             else if s.player(idx).confirmedPicks then fuccess(Some(s))
             else
-              val confirmed = s.updatePlayer(idx, _.confirmPicks)
-              repo.update(confirmed).map: _ =>
-                // Notify opponent that player confirmed
+              // Atomic: only set this player's confirm flag to avoid lost-update race
+              repo.setConfirmedPicks(seriesId, idx, true).flatMap: _ =>
                 socketNotifyConfirmed(seriesId, idx, "picks")
-                // Schedule phase transition after delay when both confirmed
-                if confirmed.bothPicksConfirmed then
-                  scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
-                    transitionToPhase(seriesId, Series.Phase.Banning)
-                Some(confirmed)
+                // Re-read to check if both players confirmed (after atomic write)
+                repo.byId(seriesId).map:
+                  case Some(updated) =>
+                    if updated.bothPicksConfirmed then
+                      scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                        transitionToPhase(seriesId, Series.Phase.Banning)
+                    Some(updated)
+                  case None => None
 
   def cancelConfirmPicks(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
@@ -129,10 +131,10 @@ final class SeriesApi(
             if s.phase != Series.Phase.Picking then fuccess(None)
             else if !s.player(idx).confirmedPicks then fuccess(Some(s))
             else
-              val updated = s.updatePlayer(idx, _.cancelConfirmPicks)
-              repo.update(updated).map: _ =>
+              // Atomic: only unset this player's confirm flag
+              repo.setConfirmedPicks(seriesId, idx, false).flatMap: _ =>
                 socketNotifyCancelConfirmed(seriesId, idx, "picks")
-                Some(updated)
+                repo.byId(seriesId).map(_.orElse(Some(s)))
 
   // ===== 픽 타임아웃 =====
 
@@ -183,15 +185,17 @@ final class SeriesApi(
             else if s.bans(idx).isEmpty then fuccess(None)
             else if s.player(idx).confirmedBans then fuccess(Some(s))
             else
-              val confirmed = s.updatePlayer(idx, _.confirmBans)
-              repo.update(confirmed).map: _ =>
-                // Notify opponent that player confirmed
+              // Atomic: only set this player's confirm flag to avoid lost-update race
+              repo.setConfirmedBans(seriesId, idx, true).flatMap: _ =>
                 socketNotifyConfirmed(seriesId, idx, "bans")
-                // Schedule game start after delay when both confirmed
-                if confirmed.bothBansConfirmed then
-                  scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
-                    startGame1Delayed(seriesId)
-                Some(confirmed)
+                // Re-read to check if both players confirmed (after atomic write)
+                repo.byId(seriesId).map:
+                  case Some(updated) =>
+                    if updated.bothBansConfirmed then
+                      scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                        startGame1Delayed(seriesId)
+                    Some(updated)
+                  case None => None
 
   def cancelConfirmBans(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
@@ -203,30 +207,32 @@ final class SeriesApi(
             if s.phase != Series.Phase.Banning then fuccess(None)
             else if !s.player(idx).confirmedBans then fuccess(Some(s))
             else
-              val updated = s.updatePlayer(idx, _.cancelConfirmBans)
-              repo.update(updated).map: _ =>
+              // Atomic: only unset this player's confirm flag
+              repo.setConfirmedBans(seriesId, idx, false).flatMap: _ =>
                 socketNotifyCancelConfirmed(seriesId, idx, "bans")
-                Some(updated)
+                repo.byId(seriesId).map(_.orElse(Some(s)))
 
   // ===== Delayed Phase Transition (after both confirm) =====
 
   private def transitionToPhase(seriesId: SeriesId, phase: Series.Phase): Unit =
-    repo.byId(seriesId).foreach:
-      case None => ()
-      case Some(s) =>
-        // Only transition if still in expected phase
-        if s.bothPicksConfirmed && s.phase == Series.Phase.Picking then
-          val updated = s.setPhase(phase)
-          repo.update(updated).foreach(_ => Bus.pub(SeriesPhaseChanged(updated)))
+    // Atomic: only transition if phase is still Picking (prevents double transition)
+    repo.setPhaseIfCurrent(seriesId, Series.Phase.Picking, phase).foreach:
+      case true =>
+        repo.byId(seriesId).foreach:
+          case Some(s) => Bus.pub(SeriesPhaseChanged(s))
+          case None    => ()
+      case false => () // Already transitioned by the other player's confirm
 
   private def startGame1Delayed(seriesId: SeriesId): Unit =
-    repo.byId(seriesId).foreach:
-      case None => ()
-      case Some(s) =>
-        // Only start if still in Banning phase with both confirmed
-        if s.bothBansConfirmed && s.phase == Series.Phase.Banning then
-          val withNeutral = s.addNeutralOpening
-          startGame1(withNeutral)
+    // Atomic: claim phase transition from Banning to prevent double game creation
+    repo.setPhaseIfCurrent(seriesId, Series.Phase.Banning, Series.Phase.RandomSelecting).foreach:
+      case true =>
+        repo.byId(seriesId).foreach:
+          case Some(s) if s.bothBansConfirmed =>
+            val withNeutral = s.addNeutralOpening
+            startGame1(withNeutral)
+          case _ => ()
+      case false => () // Already transitioned
 
   // ===== 밴 타임아웃 =====
 
