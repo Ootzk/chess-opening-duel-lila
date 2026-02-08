@@ -62,7 +62,7 @@ final private[api] class RoundApi(
       withTournament(pov, tour)
         .compose(withSwiss(swiss))
         .compose(withSimul(simul))
-        .compose(withSeries(seriesGame))
+        .compose(withSeries(pov, seriesGame))
         .compose(withSteps(pov, initialFen))
         .compose(withNote(note))
         .compose(withBookmark(bookmarked))
@@ -94,7 +94,7 @@ final private[api] class RoundApi(
       withTournament(pov, tour)
         .compose(withSwiss(swiss))
         .compose(withSimul(simul))
-        .compose(withSeries(seriesGame))
+        .compose(withSeries(pov, seriesGame))
         .compose(withNote(note))
         .compose(withBookmark(bookmarked))
         .compose(withSteps(pov, initialFen))
@@ -305,17 +305,35 @@ final private[api] class RoundApi(
         )
     )
 
-  private def withSeries(seriesOption: Option[lila.series.Series])(json: JsObject) =
+  private def withSeries(pov: Pov, seriesOption: Option[lila.series.Series])(json: JsObject) =
     json.add(
       "series",
       seriesOption.map: s =>
         Json.obj(
-          "id" -> s.id,
-          "round" -> s.currentRound,
-          "bestOf" -> lila.series.Series.bestOf,
-          "scores" -> Json.arr(s.players._1.score, s.players._2.score),
-          "finished" -> s.isFinished,
-          "openings" -> s.openings.map(op => Json.obj("name" -> op.name, "url" -> op.url)),
-          "currentOpening" -> s.currentOpening.map(_.name)
-        )
+          "id"             -> s.id,
+          "round"          -> s.currentRound,
+          "bestOf"         -> lila.series.Series.bestOf,
+          "scores"         -> Json.arr(s.players._1.displayScore, s.players._2.displayScore),
+          "finished"       -> s.isFinished,
+          "currentOpening" -> s.currentOpening.map(_.name),
+          "players" -> Json.arr(
+            seriesPlayerJson(s.players._1),
+            seriesPlayerJson(s.players._2)
+          ),
+          "openings" -> s.openings.map: op =>
+            Json.obj(
+              "name"        -> op.name,
+              "fen"         -> op.fen.value,
+              "url"         -> op.url,
+              "source"      -> (if op.isPick then "pick" else if op.isNeutral then "neutral" else "ban"),
+              "owner"       -> op.ownerIndex,
+              "usedInRound" -> op.usedInRound,
+              "selectedBy"  -> op.selectedBy.map(_.toString.toLowerCase)
+            )
+        ).add("povIndex" -> pov.player.userId.flatMap(s.playerIndex))
     )
+
+  private def seriesPlayerJson(p: lila.series.SeriesPlayer) = Json.obj(
+    "userId" -> p.userId,
+    "index"  -> p.index
+  )

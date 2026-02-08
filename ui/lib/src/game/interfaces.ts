@@ -22,8 +22,25 @@ export interface Series {
   bestOf: number;
   scores: [number, number];
   finished: boolean;
-  openings: { name: string; url: string }[];
   currentOpening?: string;
+  povIndex?: number;
+  players: [SeriesPlayerInfo, SeriesPlayerInfo];
+  openings: SeriesOpeningInfo[];
+}
+
+export interface SeriesPlayerInfo {
+  userId: string;
+  index: number;
+}
+
+export interface SeriesOpeningInfo {
+  name: string;
+  fen: string;
+  url?: string;
+  source: 'pick' | 'ban' | 'neutral';
+  owner: number;
+  usedInRound?: number;
+  selectedBy?: string;
 }
 
 export interface Game {

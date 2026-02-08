@@ -7,6 +7,7 @@ import { text as xhrText } from 'lib/xhr';
 import type MoveOn from './moveOn';
 import type { TourPlayer } from 'lib/game';
 import { tourStandingCtrl, type TourStandingCtrl } from './tourStanding';
+import { seriesOpeningsCtrl, type SeriesOpeningsCtrl } from './seriesOpenings';
 import { wsConnect, wsDestroy } from 'lib/socket';
 import { storage } from 'lib/storage';
 import { setClockWidget } from 'lib/game/clock/clockWidget';
@@ -128,6 +129,10 @@ async function boot(
   if (chatOpts) {
     if (data.tournament?.top) {
       chatOpts.plugin = tourStandingCtrl(data.tournament.top, data.tournament.team, i18n.site.standings);
+    } else if (data.series?.openings?.length) {
+      chatOpts.plugin = seriesOpeningsCtrl(data.series, data.player, data.opponent);
+      chatOpts.preset = getPresetGroup(data);
+      chatOpts.enhance = { plies: true };
     } else if (!data.simul && !data.swiss) {
       chatOpts.preset = getPresetGroup(data);
       chatOpts.enhance = { plies: true };

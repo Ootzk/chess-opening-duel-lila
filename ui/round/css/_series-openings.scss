@@ -1,0 +1,85 @@
+.series-openings {
+  @extend %flex-column;
+  height: 100%;
+
+  &__tabs {
+    display: flex;
+    flex: 0 0 auto;
+    border-bottom: 1px solid $c-border;
+    font-size: 0.85em;
+  }
+
+  &__tab {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 0.35em 4px;
+    cursor: pointer;
+    @extend %nowrap-hidden;
+    color: $c-font-dim;
+
+    &:hover {
+      background: $m-accent_bg--mix-15;
+    }
+
+    &.active {
+      color: $c-font;
+      border-bottom: 2px solid $c-accent;
+    }
+
+    .utitle {
+      color: $c-brag;
+      font-weight: bold;
+    }
+
+    .uflair {
+      height: 1.1em;
+      aspect-ratio: 1;
+      vertical-align: middle;
+      margin-inline-start: 0.3ch;
+    }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: $block-gap;
+    padding: $block-gap;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    align-content: start;
+  }
+
+  &__card {
+    @extend %flex-column;
+    @extend %box-radius;
+    background: $c-bg-zebra;
+  }
+
+  &__board {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+
+    cg-board {
+      @extend %box-radius;
+    }
+  }
+
+  &__name {
+    font-size: 0.75em;
+    line-height: 1.2;
+    padding: 2px 4px;
+    text-align: center;
+    word-break: break-word;
+  }
+
+  &__empty {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $c-font-dim;
+    font-style: italic;
+    padding: 2em;
+  }
+}
