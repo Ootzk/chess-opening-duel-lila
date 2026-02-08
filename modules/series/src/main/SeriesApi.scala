@@ -48,6 +48,19 @@ final class SeriesApi(
             val updated = s.updatePlayer(idx, _.updateLastSeen)
             repo.update(updated).inject(Some(updated))
 
+  /** WebSocket ping - updates lastSeen for a specific player */
+  def ping(seriesId: SeriesId, playerIndex: Int): Funit =
+    repo.byId(seriesId).flatMap:
+      case None => funit
+      case Some(s) if s.isNotFinished =>
+        val updated = s.updatePlayer(playerIndex, _.updateLastSeen)
+        repo.update(updated)
+      case _ => funit
+
+  /** WebSocket gone - player connected/disconnected, notify opponent via socket */
+  def setPlayerGone(seriesId: SeriesId, playerIndex: Int, gone: Boolean): Unit =
+    socket.foreach(_.notifyGone(seriesId, playerIndex, gone))
+
   // ===== 픽 설정 =====
 
   def setPicks(seriesId: SeriesId, userId: UserId, presets: List[OpeningPreset]): Fu[Option[Series]] =
@@ -100,6 +113,8 @@ final class SeriesApi(
             else
               val confirmed = s.updatePlayer(idx, _.confirmPicks)
               repo.update(confirmed).map: _ =>
+                // Notify opponent that player confirmed
+                socketNotifyConfirmed(seriesId, idx, "picks")
                 // Schedule phase transition after delay when both confirmed
                 if confirmed.bothPicksConfirmed then
                   scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
@@ -117,7 +132,9 @@ final class SeriesApi(
             else if !s.player(idx).confirmedPicks then fuccess(Some(s))
             else
               val updated = s.updatePlayer(idx, _.cancelConfirmPicks)
-              repo.update(updated).inject(Some(updated))
+              repo.update(updated).map: _ =>
+                socketNotifyCancelConfirmed(seriesId, idx, "picks")
+                Some(updated)
 
   // ===== 픽 타임아웃 =====
 
@@ -149,7 +166,11 @@ final class SeriesApi(
               val updated =
                 if confirmed.bothPicksConfirmed then confirmed.setPhase(Series.Phase.Banning)
                 else confirmed
-              repo.update(updated).inject(Some(updated))
+              repo.update(updated).map: _ =>
+                socketNotifyConfirmed(seriesId, idx, "picks")
+                if updated.phase == Series.Phase.Banning then
+                  Bus.pub(SeriesPhaseChanged(updated))
+                Some(updated)
 
   // ===== 밴 확정 =====
 
@@ -166,6 +187,8 @@ final class SeriesApi(
             else
               val confirmed = s.updatePlayer(idx, _.confirmBans)
               repo.update(confirmed).map: _ =>
+                // Notify opponent that player confirmed
+                socketNotifyConfirmed(seriesId, idx, "bans")
                 // Schedule game start after delay when both confirmed
                 if confirmed.bothBansConfirmed then
                   scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
@@ -183,7 +206,9 @@ final class SeriesApi(
             else if !s.player(idx).confirmedBans then fuccess(Some(s))
             else
               val updated = s.updatePlayer(idx, _.cancelConfirmBans)
-              repo.update(updated).inject(Some(updated))
+              repo.update(updated).map: _ =>
+                socketNotifyCancelConfirmed(seriesId, idx, "bans")
+                Some(updated)
 
   // ===== Delayed Phase Transition (after both confirm) =====
 
@@ -240,7 +265,9 @@ final class SeriesApi(
                 val withNeutral = confirmed.addNeutralOpening
                 startGame1(withNeutral)
               else
-                repo.update(confirmed).inject(Some(confirmed))
+                repo.update(confirmed).map: _ =>
+                  socketNotifyConfirmed(seriesId, idx, "bans")
+                  Some(confirmed)
 
   // ===== Game 1 시작 =====
 
@@ -353,6 +380,7 @@ final class SeriesApi(
                       .setPhase(Series.Phase.Playing)
                     _ <- repo.update(withGame)
                     _ <- onStart.exec(game.id)
+                    _ = Bus.pub(SeriesPhaseChanged(withGame))
                   yield Some(game)
 
   // ===== Server-side Phase Timeout =====
@@ -398,7 +426,10 @@ final class SeriesApi(
               val final_ =
                 if updated.bothPicksConfirmed then updated.setPhase(Series.Phase.Banning)
                 else updated
-              repo.update(final_).inject(Some(final_))
+              repo.update(final_).map: _ =>
+                if final_.phase == Series.Phase.Banning then
+                  Bus.pub(SeriesPhaseChanged(final_))
+                Some(final_)
 
   private def serverTimeoutBanning(s: Series): Fu[Option[Series]] =
     // 양측 모두 확정됐으면 3초 스케줄이 처리하므로 여기서는 아무것도 안 함
@@ -483,6 +514,7 @@ final class SeriesApi(
         .setPhase(Series.Phase.Playing)
       _ <- repo.update(withGame)
       _ <- onStart.exec(game.id)
+      _ = Bus.pub(SeriesPhaseChanged(withGame))
     yield Some(game)
 
   // ===== 레거시 호환 (ChallengeJoiner에서 사용) =====
@@ -564,6 +596,19 @@ final class SeriesApi(
           )
         )
         .start
+
+  // Work around circular dependency
+  private var socket: Option[SeriesSocket] = None
+  private[series] def registerSocket(s: SeriesSocket) = socket = s.some
+
+  private def socketReload(seriesId: SeriesId): Unit =
+    socket.foreach(_.reload(seriesId))
+
+  private def socketNotifyConfirmed(seriesId: SeriesId, playerIndex: Int, phase: String): Unit =
+    socket.foreach(_.notifyConfirmed(seriesId, playerIndex, phase))
+
+  private def socketNotifyCancelConfirmed(seriesId: SeriesId, playerIndex: Int, phase: String): Unit =
+    socket.foreach(_.notifyConfirmed(seriesId, playerIndex, phase, confirmed = false))
 
 // Events
 case class SeriesCreated(s: Series)

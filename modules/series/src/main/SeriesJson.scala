@@ -69,7 +69,10 @@ final class SeriesJson(
       "confirmedPicks" -> p.confirmedPicks,
       "confirmedBans" -> p.confirmedBans,
       "isOnline" -> p.isOnline
-    ).add("user" -> user.map(u => Json.obj("id" -> u.id, "name" -> u.name)))
+    ).add("user" -> user.map(u =>
+      Json.obj("id" -> u.id, "name" -> u.name)
+        .add("title" -> u.title.map(_.value))
+    ))
 
   private def openingJson(o: SeriesOpening): JsObject = Json.obj(
     "id" -> o.id.value,

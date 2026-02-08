@@ -1,6 +1,7 @@
 import { init, attributesModule, eventListenersModule, classModule, propsModule, styleModule } from 'snabbdom';
 import menuHover from 'lib/menuHover';
 import { initMiniBoards } from 'lib/view/miniBoard';
+import { wsConnect, wsSend } from 'lib/socket';
 import view from './view';
 import type { PickConfig } from './interfaces';
 import SeriesPickCtrl from './ctrl';
@@ -26,9 +27,28 @@ export function initModule(config: PickConfig): void {
 
   menuHover();
 
+  // Connect to series WebSocket
+  wsConnect(`/series/${config.seriesId}/socket/v5`, config.socketVersion ?? 0, {
+    events: {
+      reload: () => ctrl.handleReload(),
+      confirmed: (d: { player: number; phase: string }) => ctrl.handleConfirmed(d),
+      phase: (d: { phase: number; gameId?: string }) => ctrl.handlePhase(d),
+      gone: (d: { player: number; gone: boolean }) => ctrl.handleGone(d),
+      aborted: () => ctrl.handleAborted(),
+    },
+  });
+
+  // Send ping every 3 seconds for lastSeen tracking
+  const pingInterval = setInterval(() => {
+    wsSend('seriesPing');
+  }, 3000);
+
   // Start timers after vnode is initialized (prevents "vnode not initialized" error)
   ctrl.init();
 
   // Cleanup on page unload
-  window.addEventListener('beforeunload', () => ctrl.destroy());
+  window.addEventListener('beforeunload', () => {
+    ctrl.destroy();
+    clearInterval(pingInterval);
+  });
 }

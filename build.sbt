@@ -321,7 +321,7 @@ lazy val swiss = module("swiss",
 )
 
 lazy val series = module("series",
-  Seq(game, memo),
+  Seq(game, room, memo),
   Seq(lettuce)
 )
 

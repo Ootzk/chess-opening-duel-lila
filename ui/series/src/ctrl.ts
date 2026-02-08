@@ -51,9 +51,8 @@ export default class SeriesPickCtrl {
     if (this.isRandomSelecting) {
       this.startRandomSelecting();
     } else if (this.isSelecting && this.isWaitingForOpponentSelect) {
-      // Winner waiting for loser to select - poll for state changes
+      // Winner waiting for loser to select - WebSocket will notify us
       this.startTimer();
-      this.startPolling();
     } else {
       // Start timer for pick/ban phases and selecting
       // If already timed out (timeLeft <= 0), trigger timeout immediately
@@ -61,10 +60,7 @@ export default class SeriesPickCtrl {
         this.onTimeout();
       } else {
         this.startTimer();
-        // Start polling for opponent status updates (pick/ban phases)
-        if (this.isPicking || this.isBanning) {
-          this.startPolling();
-        }
+        // WebSocket handles opponent status updates (pick/ban phases)
       }
     }
   }
@@ -142,9 +138,8 @@ export default class SeriesPickCtrl {
         const newPhase = Number(data.phase);
         if (newPhase !== this.phase) {
           window.location.reload();
-        } else if (this.isWaiting) {
-          this.startPolling();
         }
+        // WebSocket will notify us when opponent confirms
       }
     } catch (e) {
       console.error('Error timeout picks:', e);
@@ -172,9 +167,8 @@ export default class SeriesPickCtrl {
           } else {
             window.location.reload();
           }
-        } else if (this.isWaiting) {
-          this.startPolling();
         }
+        // WebSocket will notify us when opponent confirms
       }
     } catch (e) {
       console.error('Error timeout bans:', e);
@@ -393,10 +387,8 @@ export default class SeriesPickCtrl {
             window.location.reload();
             return;
           }
-        } else if (this.isWaiting) {
-          // Start polling while waiting for opponent
-          this.startPolling();
         }
+        // WebSocket will notify us when opponent confirms
       }
     } catch (e) {
       console.error('Error confirming:', e);
@@ -405,21 +397,51 @@ export default class SeriesPickCtrl {
     this.redraw();
   }
 
-  private pollingInterval?: number;
+  // ===== WebSocket Event Handlers =====
 
-  private startPolling(): void {
-    if (this.pollingInterval) return;
-    this.pollingInterval = window.setInterval(() => this.pollState(), 1000);
+  /** Handle reload event - fetch fresh state from server */
+  handleReload(): void {
+    this.fetchState();
   }
 
-  private stopPolling(): void {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = undefined;
+  /** Handle confirmed event - opponent confirmed or cancelled their picks/bans */
+  handleConfirmed(data: { player: number; phase: string; confirmed?: boolean }): void {
+    const povIndex = this.series.povIndex ?? 0;
+    if (data.player !== povIndex) {
+      this.opponentConfirmed = data.confirmed !== false;
+      this.redraw();
     }
   }
 
-  private async pollState(): Promise<void> {
+  /** Handle phase event - phase changed */
+  handlePhase(data: { phase: number; gameId?: string }): void {
+    console.log('[series] WS phase event:', data);
+    if (data.phase === PhaseId.Playing && data.gameId) {
+      window.location.href = `/${data.gameId}`;
+    } else if (data.phase === PhaseId.RandomSelecting) {
+      window.location.href = `/series/${this.seriesId}/random-selecting`;
+    } else if (data.phase !== this.phase) {
+      window.location.reload();
+    }
+  }
+
+  /** Handle gone event - player connected/disconnected */
+  handleGone(data: { player: number; gone: boolean }): void {
+    const povIndex = this.series.povIndex ?? 0;
+    if (data.player !== povIndex) {
+      this.opponentOnline = !data.gone;
+      this.redraw();
+    }
+  }
+
+  /** Handle aborted event - series was aborted */
+  handleAborted(): void {
+    alert('Series was aborted due to opponent disconnect.');
+    window.location.href = '/';
+  }
+
+  /** Fetch fresh series state from server */
+  private async fetchState(): Promise<void> {
     try {
       const response = await fetch(`/api/series/${this.seriesId}`);
       if (response.ok) {
@@ -427,29 +449,15 @@ export default class SeriesPickCtrl {
 
         // Check if series was aborted
         if (data.status === StatusId.Aborted) {
-          this.stopPolling();
-          alert('Series was aborted due to opponent disconnect.');
-          window.location.href = '/';
+          this.handleAborted();
           return;
         }
 
         const newPhase = Number(data.phase);
         // Phase changed, redirect to appropriate page
         if (newPhase !== this.phase) {
-          console.log('[series] poll detected phase change:', { newPhase, currentPhase: this.phase, RandomSelecting: PhaseId.RandomSelecting });
-          this.stopPolling();
-          if (newPhase === PhaseId.RandomSelecting) {
-            console.log('[series] Poll: Redirecting to random-selecting page');
-            window.location.href = `/series/${this.seriesId}/random-selecting`;
-            return;
-          } else if (newPhase === PhaseId.Playing && data.currentGame) {
-            // Playing 상태이고 현재 게임이 있으면 게임으로 직접 이동
-            window.location.href = `/${data.currentGame}`;
-            return;
-          } else {
-            window.location.reload();
-            return;
-          }
+          this.handlePhase({ phase: newPhase, gameId: data.currentGame });
+          return;
         }
 
         // Update opponent confirmed status and online status
@@ -473,7 +481,7 @@ export default class SeriesPickCtrl {
         }
       }
     } catch (e) {
-      console.error('Error polling state:', e);
+      console.error('Error fetching state:', e);
     }
   }
 
@@ -542,7 +550,6 @@ export default class SeriesPickCtrl {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
     }
-    this.stopPolling();
   }
 
   // RandomSelecting phase methods
@@ -589,9 +596,8 @@ export default class SeriesPickCtrl {
     if (gameId) {
       window.location.href = `/${gameId}/${povColor}`;
     } else {
-      // Fallback: poll until game is ready
-      console.warn('[series] No gameId yet, starting poll...');
-      this.startPolling();
+      // Fallback: WebSocket should notify us when game is ready
+      console.warn('[series] No gameId yet, waiting for WebSocket event...');
     }
   }
 }

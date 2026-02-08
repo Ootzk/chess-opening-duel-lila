@@ -3,6 +3,7 @@ import type { VNode } from 'snabbdom';
 import type SeriesPickCtrl from './ctrl';
 import type { OpeningPreset, SeriesOpening } from './interfaces';
 import { getOpponentBans, getMyBans, getNeutralOpening } from './interfaces';
+import { userLink } from 'lib/view/userLink';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
   if (ctrl.isRandomSelecting) {
@@ -242,28 +243,22 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
 
   // Right side: Opponent status (only in pick/ban phases)
   if (ctrl.isPicking || ctrl.isBanning) {
-    if (!ctrl.opponentOnline) {
-      rightSide.push(
-        h('div.series-pick__opponent-status.disconnected', [
-          h('span', 'Your opponent is '),
-          h('span.status-text', 'Disconnected!'),
-        ]),
-      );
-    } else if (ctrl.opponentConfirmed) {
-      rightSide.push(
-        h('div.series-pick__opponent-status.ready', [
-          h('span', 'Your opponent is '),
-          h('span.status-text', 'Ready!'),
-        ]),
-      );
-    } else {
-      rightSide.push(
-        h('div.series-pick__opponent-status.waiting', [
-          h('span', 'Your opponent is '),
-          h('span.ddloader'),
-        ]),
-      );
-    }
+    const povIndex = ctrl.series.povIndex ?? 0;
+    const oppIndex = 1 - povIndex;
+    const opponent = ctrl.series.players[oppIndex];
+    const oppUser = opponent?.user;
+    const statusClass = ctrl.opponentConfirmed ? 'ready' : 'waiting';
+
+    rightSide.push(
+      h(`div.series-pick__opponent-status.${statusClass}`, [
+        oppUser
+          ? userLink({ name: oppUser.name, title: oppUser.title, online: ctrl.opponentOnline, line: true })
+          : h('span', `Player ${oppIndex + 1}`),
+        ctrl.opponentConfirmed
+          ? h('span.status-text', ' is Ready!')
+          : h('span.status-text', ' is selecting...'),
+      ]),
+    );
   }
 
   return h('div.series-pick__actions', [

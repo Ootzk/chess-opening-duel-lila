@@ -5,6 +5,8 @@ import com.softwaremill.macwire.*
 
 import lila.common.Bus
 import lila.core.config.*
+import lila.core.socket.{ GetVersion, SocketKit, SocketVersion }
+import lila.core.id.SeriesId
 import lila.db.dsl.Coll
 
 @Module
@@ -13,7 +15,8 @@ final class Env(
     gameRepo: lila.core.game.GameRepo,
     userApi: lila.core.user.UserApi,
     onStart: lila.core.game.OnStart,
-    lightUserApi: lila.core.user.LightUserApi
+    lightUserApi: lila.core.user.LightUserApi,
+    socketKit: SocketKit
 )(using scheduler: Scheduler)(using
     Executor,
     lila.core.game.IdGenerator
@@ -30,6 +33,11 @@ final class Env(
 
   lazy val jsonView: SeriesJson = wire[SeriesJson]
 
+  lazy val socket: SeriesSocket = wire[SeriesSocket]
+
+  def version(seriesId: SeriesId): Fu[SocketVersion] =
+    socket.rooms.ask[SocketVersion](seriesId.into(RoomId))(GetVersion.apply)
+
   // Server-side timeout scheduler (lazy to avoid circular dependency)
   lazy val timeouts: SeriesTimeouts = SeriesTimeouts(scheduler, () => api)
 
@@ -38,15 +46,21 @@ final class Env(
     case SeriesCreated(s) =>
       timeouts.schedule(s.id)
 
-  // Subscribe to phase changes to reschedule/cancel timeouts
+  // Subscribe to phase changes to reschedule/cancel timeouts and notify clients
   Bus.sub[SeriesPhaseChanged]:
     case SeriesPhaseChanged(s) =>
+      socket.notifyPhase(s.id, s.phase.id, s.currentGameId)
       s.phase match
         case Series.Phase.Banning =>
           timeouts.schedule(s.id) // Reschedule for Banning phase
         case Series.Phase.RandomSelecting | Series.Phase.Playing | Series.Phase.Selecting | Series.Phase.Finished =>
           timeouts.cancel(s.id) // Cancel timeout when game starts
         case _ => ()
+
+  // Subscribe to series aborted
+  Bus.sub[SeriesAborted]:
+    case SeriesAborted(s) =>
+      socket.notifyAborted(s.id)
 
   // Subscribe to game finish events
   Bus.sub[lila.core.game.FinishGame]:

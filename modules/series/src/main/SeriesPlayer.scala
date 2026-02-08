@@ -20,6 +20,7 @@ case class SeriesPlayer(
   def cancelConfirmBans: SeriesPlayer      = copy(confirmedBans = false)
   def updateLastSeen: SeriesPlayer         = copy(lastSeenAt = Some(nowInstant))
   // None = 아직 접속 여부를 모름 → online으로 가정
-  // Some(time) = time이 10초 이내면 online, 아니면 offline
-  def isOnline: Boolean                    = lastSeenAt.forall(_.isAfter(nowInstant.minusSeconds(10)))
-  def isDisconnected: Boolean              = lastSeenAt.exists(_.isBefore(nowInstant.minusSeconds(10)))
+  // Some(time) = time이 5초 이내면 online, 아니면 offline
+  // (WS ping이 3초 간격으로 개별 플레이어별 갱신)
+  def isOnline: Boolean                    = lastSeenAt.forall(_.isAfter(nowInstant.minusSeconds(5)))
+  def isDisconnected: Boolean              = lastSeenAt.exists(_.isBefore(nowInstant.minusSeconds(5)))

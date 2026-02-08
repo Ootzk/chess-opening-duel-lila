@@ -32,6 +32,7 @@ export interface SeriesPlayer {
   user?: {
     id: string;
     name: string;
+    title?: string;
   };
 }
 
@@ -59,6 +60,7 @@ export interface PickConfig {
   presets: OpeningPreset[];
   series: SeriesData;
   i18n: Record<string, string>;
+  socketVersion?: number;
 }
 
 // Phase IDs matching Series.Phase in Scala

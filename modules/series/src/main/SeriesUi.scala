@@ -4,13 +4,14 @@ package ui
 import play.api.libs.json.{ Json, JsObject }
 
 import lila.ui.*
+import lila.core.socket.SocketVersion
 
 import ScalatagsTemplate.*
 
 final class SeriesUi(helpers: Helpers):
   import helpers.*
 
-  def pick(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset], displayOpenings: Vector[OpeningPreset])(using Context): Page =
+  def pick(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset], displayOpenings: Vector[OpeningPreset], socketVersion: SocketVersion)(using Context): Page =
     val phaseName = s.phase match
       case Series.Phase.Picking => "Pick Phase"
       case Series.Phase.Banning => "Ban Phase"
@@ -20,7 +21,7 @@ final class SeriesUi(helpers: Helpers):
 
     Page(s"Opening Duel - $phaseName")
       .css("series.pick")
-      .js(pageModule(s, seriesJson, presets))
+      .js(pageModule(s, seriesJson, presets, socketVersion))
       .csp(_.withWebAssembly)
       .flag(_.zoom)
       .body(
@@ -61,7 +62,7 @@ final class SeriesUi(helpers: Helpers):
         )
       )
 
-  private def pageModule(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset])(using Context) =
+  private def pageModule(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset], socketVersion: SocketVersion)(using Context) =
     PageModule(
       "series.timeoutPhase",
       Json.obj(
@@ -73,17 +74,18 @@ final class SeriesUi(helpers: Helpers):
           "url" -> p.url
         )),
         "series" -> seriesJson,
-        "i18n" -> Json.obj()
+        "i18n" -> Json.obj(),
+        "socketVersion" -> socketVersion.value
       )
     ).some
 
   // RandomSelecting phase - uses same series.timeoutPhase module as Pick/Ban
   // Snabbdom will replace the body content with view.ts renderRandomSelecting()
-  def randomSelecting(s: Series, seriesJson: JsObject)(using Context): Page =
+  def randomSelecting(s: Series, seriesJson: JsObject, socketVersion: SocketVersion)(using Context): Page =
     val gameNum = s.currentRound
     Page(s"Opening Duel - Game $gameNum Starting")
       .css("series.pick")
-      .js(pageModule(s, seriesJson, Vector.empty))
+      .js(pageModule(s, seriesJson, Vector.empty, socketVersion))
       .csp(_.withWebAssembly)
       .flag(_.zoom)
       .body(

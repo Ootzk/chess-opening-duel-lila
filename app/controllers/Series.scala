@@ -50,7 +50,8 @@ final class Series(env: Env) extends LilaController(env):
           case _ => OpeningPresets.all
         for
           json <- env.series.jsonView(s, Some(me.userId))
-          page <- Ok.page(views.series.pick(s, json, OpeningPresets.all, displayOpenings))
+          socketVersion <- env.series.version(s.id)
+          page <- Ok.page(views.series.pick(s, json, OpeningPresets.all, displayOpenings, socketVersion))
         yield page
   }
 
@@ -63,7 +64,8 @@ final class Series(env: Env) extends LilaController(env):
       else
         for
           json <- env.series.jsonView(s, Some(me.userId))
-          page <- Ok.page(views.series.randomSelecting(s, json))
+          socketVersion <- env.series.version(s.id)
+          page <- Ok.page(views.series.randomSelecting(s, json, socketVersion))
         yield page
   }
 
