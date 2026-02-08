@@ -310,6 +310,12 @@ final private class RoundAsyncActor(
         publish:
           chess.ByColor(color => Event.SeriesRandomSelectingRedirect(color, seriesId)).toList
 
+    // Series: Finished 페이지로 리다이렉트 (시리즈 종료)
+    case lila.game.actorApi.NotifySeriesFinished(seriesId, _) =>
+      fuccess:
+        publish:
+          chess.ByColor(color => Event.SeriesFinishedRedirect(color, seriesId)).toList
+
     // Series: forfeit으로 인한 게임 종료 (resign 또는 abort)
     case lila.game.actorApi.NotifySeriesForfeited(_, loserColor) =>
       handle: game =>

@@ -51,6 +51,26 @@ final class SeriesSocket(
   def notifyAborted(seriesId: SeriesId): Unit =
     rooms.tell(seriesId.into(RoomId), NotifyVersion("aborted", JsNull))
 
+  /** Notify rematch offer to the room */
+  def notifyRematchOffer(seriesId: SeriesId, playerIndex: Int): Unit =
+    rooms.tell(
+      seriesId.into(RoomId),
+      NotifyVersion(
+        "rematchOffer",
+        Json.obj("player" -> playerIndex)
+      )
+    )
+
+  /** Notify rematch taken (new series created) */
+  def notifyRematchTaken(seriesId: SeriesId, newSeriesId: SeriesId): Unit =
+    rooms.tell(
+      seriesId.into(RoomId),
+      NotifyVersion(
+        "rematchTaken",
+        Json.obj("newSeriesId" -> newSeriesId.value)
+      )
+    )
+
   /** Notify player gone/back status to the room */
   def notifyGone(seriesId: SeriesId, playerIndex: Int, gone: Boolean): Unit =
     rooms.tell(

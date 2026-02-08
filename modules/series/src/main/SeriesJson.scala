@@ -53,6 +53,7 @@ final class SeriesJson(
           if s.phase == Series.Phase.Selecting then s.lastGameLoser
           else None
         })
+        .add("rematchOfferedBy" -> s.rematchOfferedBy)
 
   def roundInfo(s: Series): JsObject =
     Json.obj(

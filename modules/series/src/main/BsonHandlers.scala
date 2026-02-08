@@ -156,7 +156,8 @@ object BsonHandlers:
         clock = r.get[chess.Clock.Config]("cl"),
         createdAt = r.get[Instant]("ca"),
         finishedAt = r.getO[Instant]("fa"),
-        forfeitBy = r.getO[Int]("fb")
+        forfeitBy = r.getO[Int]("fb"),
+        rematchOfferedBy = r.getO[Int]("ro")
       )
 
     def writes(w: BSON.Writer, s: Series) = $doc(
@@ -172,5 +173,6 @@ object BsonHandlers:
       "cl" -> s.clock,
       "ca" -> s.createdAt,
       "fa" -> s.finishedAt,
-      "fb" -> s.forfeitBy
+      "fb" -> s.forfeitBy,
+      "ro" -> s.rematchOfferedBy
     )

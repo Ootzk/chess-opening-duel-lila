@@ -199,6 +199,9 @@ final class RoundSocket(
   Bus.sub[lila.game.actorApi.NotifySeriesRandomSelecting]: randomSelecting =>
     rounds.tellIfPresent(randomSelecting.oldGameId, randomSelecting)
 
+  Bus.sub[lila.game.actorApi.NotifySeriesFinished]: finished =>
+    rounds.tellIfPresent(finished.oldGameId, finished)
+
   Bus.sub[lila.game.actorApi.NotifySeriesForfeited]: forfeited =>
     rounds.tellIfPresent(forfeited.gameId, forfeited)
 

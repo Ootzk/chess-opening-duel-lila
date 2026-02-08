@@ -238,6 +238,13 @@ object Event:
     override def only = Some(color)
     override def owner = true
 
+  // Finished 페이지로 리다이렉트 (Series: 종료)
+  case class SeriesFinishedRedirect(color: Color, seriesId: lila.core.id.SeriesId) extends Event:
+    def typ = "redirect"
+    def data = Json.obj("url" -> s"/series/$seriesId/finished")
+    override def only = Some(color)
+    override def owner = true
+
   case class Promotion(role: PromotableRole, pos: Square) extends Event:
     def typ = "promotion"
     def data =

@@ -36,7 +36,7 @@ final class Series(env: Env) extends LilaController(env):
             Redirect(s"/${gameId}/${povColor.name}")
           case None => Redirect(routes.Series.show(id))
       else if s.isFinished then
-        Redirect(routes.Series.show(id))
+        Redirect(routes.Series.finishedPage(id))
       else
         val povIndex = s.playerIndex(me.userId).getOrElse(0)
         val displayOpenings: Vector[lila.series.OpeningPreset] = s.phase match
@@ -312,4 +312,32 @@ final class Series(env: Env) extends LilaController(env):
               "redirect" -> s"/${game.id}/${povColor.name}"
             ))
           case None => JsonBadRequest(jsonError("Cannot select opening"))
+  }
+
+  // 시리즈 종료 페이지 (HTML)
+  def finishedPage(id: SeriesId) = Auth { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then Forbidden("Not a player of this series")
+      else if !s.isFinished then Redirect(routes.Series.pickPage(id))
+      else
+        for
+          json <- env.series.jsonView(s, Some(me.userId))
+          socketVersion <- env.series.version(s.id)
+          page <- Ok.page(views.series.finished(s, json, socketVersion))
+        yield page
+  }
+
+  // 리매치 offer/accept
+  def rematch(id: SeriesId) = Auth { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        JsonBadRequest(jsonError("Not a player of this series"))
+      else if !s.isFinished then
+        JsonBadRequest(jsonError("Series not finished"))
+      else
+        api.offerOrAcceptRematch(id, me.userId).map:
+          case Some(newSeriesId) =>
+            JsonOk(Json.obj("ok" -> true, "newSeriesId" -> newSeriesId.value))
+          case None =>
+            JsonOk(Json.obj("ok" -> true, "offered" -> true))
   }

@@ -28,6 +28,10 @@ export default class SeriesPickCtrl {
   randomSelectingCountdown: number = 5;
   gameId: string | null = null;
 
+  // Finished phase state
+  offeringRematch: boolean = false;
+  opponentOfferingRematch: boolean = false;
+
   constructor(
     readonly config: PickConfig,
     readonly redraw: () => void,
@@ -49,7 +53,10 @@ export default class SeriesPickCtrl {
 
   // Call this after vnode initialization in series.pick.ts
   init(): void {
-    if (this.isRandomSelecting) {
+    if (this.isFinished) {
+      // No timers needed for finished page
+      return;
+    } else if (this.isRandomSelecting) {
       this.startRandomSelecting();
     } else if (this.isSelecting && this.isWaitingForOpponentSelect) {
       // Winner waiting for loser to select - WebSocket will notify us
@@ -91,6 +98,15 @@ export default class SeriesPickCtrl {
 
     // Load opponent online status
     this.opponentOnline = this.series.players[oppIndex].isOnline;
+
+    // Load rematch state (for finished page refresh)
+    if (this.isFinished && this.series.rematchOfferedBy !== undefined) {
+      if (this.series.rematchOfferedBy === povIndex) {
+        this.offeringRematch = true;
+      } else {
+        this.opponentOfferingRematch = true;
+      }
+    }
   }
 
   private startTimer(): void {
@@ -208,6 +224,10 @@ export default class SeriesPickCtrl {
 
   get isRandomSelecting(): boolean {
     return this.phase === PhaseId.RandomSelecting;
+  }
+
+  get isFinished(): boolean {
+    return this.phase === PhaseId.Finished;
   }
 
   get isWaiting(): boolean {
@@ -420,7 +440,9 @@ export default class SeriesPickCtrl {
   /** Handle phase event - phase changed */
   handlePhase(data: { phase: number; gameId?: string }): void {
     console.log('[series] WS phase event:', data);
-    if (data.phase === PhaseId.Playing && data.gameId) {
+    if (data.phase === PhaseId.Finished) {
+      window.location.href = `/series/${this.seriesId}/finished`;
+    } else if (data.phase === PhaseId.Playing && data.gameId) {
       window.location.href = `/${data.gameId}`;
     } else if (data.phase === PhaseId.RandomSelecting) {
       window.location.href = `/series/${this.seriesId}/random-selecting`;
@@ -442,6 +464,40 @@ export default class SeriesPickCtrl {
   handleAborted(): void {
     alert('Series was aborted due to opponent disconnect.');
     window.location.href = '/';
+  }
+
+  /** Handle rematch offer from opponent */
+  handleRematchOffer(data: { player: number }): void {
+    const povIndex = this.series.povIndex ?? 0;
+    if (data.player !== povIndex) {
+      this.opponentOfferingRematch = true;
+    } else {
+      this.offeringRematch = true;
+    }
+    this.redraw();
+  }
+
+  /** Handle rematch taken - both players redirected to new series */
+  handleRematchTaken(data: { newSeriesId: string }): void {
+    window.location.href = `/series/${data.newSeriesId}/pick`;
+  }
+
+  /** Request rematch */
+  async requestRematch(): Promise<void> {
+    try {
+      const response = await fetch(`/series/${this.seriesId}/rematch`, { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.newSeriesId) {
+          window.location.href = `/series/${data.newSeriesId}/pick`;
+        } else {
+          this.offeringRematch = true;
+          this.redraw();
+        }
+      }
+    } catch (e) {
+      console.error('Error requesting rematch:', e);
+    }
   }
 
   /** Fetch fresh series state from server */

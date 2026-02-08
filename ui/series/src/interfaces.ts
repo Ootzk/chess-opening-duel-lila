@@ -52,6 +52,7 @@ export interface SeriesData {
   selectingPlayer?: number; // 0 or 1
   finished: boolean;
   winner?: number; // 0 or 1
+  rematchOfferedBy?: number; // 0 or 1
 }
 
 export interface PickConfig {

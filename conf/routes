@@ -471,6 +471,7 @@ GET   /$lang<\w\w\w?>/swiss                   controllers.Swiss.homeLang(lang: L
 GET   /series/$id<\w{8}>                      controllers.Series.show(id: SeriesId)
 GET   /series/$id<\w{8}>/pick                 controllers.Series.pickPage(id: SeriesId)
 GET   /series/$id<\w{8}>/random-selecting    controllers.Series.randomSelectingPage(id: SeriesId)
+GET   /series/$id<\w{8}>/finished           controllers.Series.finishedPage(id: SeriesId)
 GET   /api/series/$id<\w{8}>                  controllers.Series.apiShow(id: SeriesId)
 POST  /series/$id<\w{8}>/next                 controllers.Series.nextGame(id: SeriesId)
 # Series Ban/Pick API
@@ -486,6 +487,7 @@ POST  /series/$id<\w{8}>/timeoutBans          controllers.Series.timeoutBans(id:
 POST  /series/$id<\w{8}>/selectOpening        controllers.Series.selectNextOpening(id: SeriesId)
 POST  /series/$id<\w{8}>/selectRandom         controllers.Series.selectRandomOpening(id: SeriesId)
 POST  /series/$id<\w{8}>/forfeit              controllers.Series.forfeit(id: SeriesId)
+POST  /series/$id<\w{8}>/rematch             controllers.Series.rematch(id: SeriesId)
 
 # Simul
 GET   /simul                                  controllers.Simul.home

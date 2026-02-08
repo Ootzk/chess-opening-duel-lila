@@ -378,3 +378,155 @@
     }
   }
 }
+
+// ===== Series Finished Page =====
+
+.series-finished {
+  &__header {
+    @extend %flex-column;
+    align-items: center;
+    padding: 2rem $block-gap;
+    background: $c-bg-box;
+    @extend %box-radius;
+    gap: 1rem;
+  }
+
+  &__result-banner {
+    font-size: 2.2em;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+
+    &.victory {
+      color: $c-good;
+    }
+
+    &.defeat {
+      color: $c-bad;
+    }
+  }
+
+  &__players {
+    @extend %flex-center;
+    gap: 2rem;
+    font-size: 1.2em;
+  }
+
+  &__player {
+    @extend %flex-column;
+    align-items: center;
+    gap: 0.5rem;
+
+    a {
+      font-size: 1.1em;
+    }
+  }
+
+  &__score {
+    font-size: 2em;
+    font-weight: bold;
+    font-family: 'storm';
+  }
+
+  &__vs {
+    font-size: 1.5em;
+    color: $c-font-dimmer;
+    align-self: center;
+  }
+
+  &__score-table {
+    background: $c-bg-box;
+    @extend %box-radius;
+    padding: $block-gap;
+
+    .series-score__table {
+      width: 100%;
+      border-collapse: collapse;
+
+      th,
+      td {
+        padding: 0.6em 1em;
+        text-align: center;
+      }
+
+      th {
+        border-bottom: 2px solid $c-border;
+        font-weight: bold;
+        color: $c-font-dim;
+      }
+
+      td {
+        border-bottom: 1px solid $c-bg-zebra;
+      }
+    }
+
+    .series-score__label {
+      text-align: center;
+      margin-top: 1rem;
+      color: $c-font-dim;
+      font-size: 0.9em;
+    }
+
+    .series-score__game a {
+      color: $c-link;
+    }
+
+    .win {
+      color: $c-good;
+      font-weight: bold;
+    }
+
+    .loss {
+      color: $c-bad;
+      font-weight: bold;
+    }
+
+    .draw {
+      color: $c-font-dim;
+    }
+
+    .pending {
+      color: $c-font-dimmer;
+    }
+
+    .opening-link {
+      color: $c-link;
+      font-size: 0.9em;
+    }
+  }
+
+  &__actions {
+    @extend %flex-center;
+    gap: 1rem;
+    padding: 1.5rem 0;
+
+    .button {
+      font-size: 1.2em;
+      padding: 0.8em 2em;
+      min-width: 140px;
+    }
+  }
+
+  &__rematch {
+    &.glowing {
+      animation: rematch-glow 1.5s ease-in-out infinite;
+    }
+
+    .ddloader {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-right: 0.3em;
+      vertical-align: middle;
+    }
+  }
+}
+
+@keyframes rematch-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba($c-good, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba($c-good, 0.8);
+  }
+}

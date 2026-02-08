@@ -19,7 +19,8 @@ case class Series(
     clock: ClockConfig,
     createdAt: Instant,
     finishedAt: Option[Instant] = None,
-    forfeitBy: Option[Int] = None
+    forfeitBy: Option[Int] = None,
+    rematchOfferedBy: Option[Int] = None
 ):
   // ===== 플레이어 접근 =====
 
@@ -60,6 +61,11 @@ case class Series(
       else None
 
   def hasEnded: Boolean = winner.isDefined
+
+  // ===== 리매치 =====
+
+  def offerRematch(playerIndex: Int): Series = copy(rematchOfferedBy = Some(playerIndex))
+  def isRematchOfferedBy(playerIndex: Int): Boolean = rematchOfferedBy.contains(playerIndex)
 
   def speed = chess.Speed(clock)
   def perfType: PerfType = lila.rating.PerfType(variant, speed)

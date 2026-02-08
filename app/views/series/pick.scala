@@ -11,3 +11,6 @@ def pick(s: Series, seriesJson: JsObject, presets: Vector[OpeningPreset], displa
 
 def randomSelecting(s: Series, seriesJson: JsObject, socketVersion: SocketVersion)(using Context) =
   views.seriesPick.randomSelecting(s, seriesJson, socketVersion)
+
+def finished(s: Series, seriesJson: JsObject, socketVersion: SocketVersion)(using Context) =
+  views.seriesPick.finished(s, seriesJson, socketVersion)

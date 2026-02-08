@@ -98,8 +98,8 @@ final class Env(
     case SeriesDrawRandomSelecting(s, oldGameId) =>
       Bus.pub(lila.game.actorApi.NotifySeriesRandomSelecting(s.id, oldGameId))
 
-  // When series is finished
+  // When series is finished - redirect both players to finished page
   Bus.sub[SeriesFinished]:
     case SeriesFinished(s) =>
-      // TODO: Could send series result notification here
-      ()
+      s.lastFinishedGame.foreach: lastGame =>
+        Bus.pub(lila.game.actorApi.NotifySeriesFinished(s.id, lastGame.gameId))

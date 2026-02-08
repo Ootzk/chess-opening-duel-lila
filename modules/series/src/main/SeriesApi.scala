@@ -628,6 +628,32 @@ final class SeriesApi(
   private def socketNotifyCancelConfirmed(seriesId: SeriesId, playerIndex: Int, phase: String): Unit =
     socket.foreach(_.notifyConfirmed(seriesId, playerIndex, phase, confirmed = false))
 
+  /** Offer or accept a rematch. Returns Some(newSeriesId) if accepted, None if just offered. */
+  def offerOrAcceptRematch(seriesId: SeriesId, userId: UserId): Fu[Option[SeriesId]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if !s.isFinished then fuccess(None)
+            else if s.rematchOfferedBy.exists(_ != idx) then
+              // Opponent already offered -> accept: create new series with random player order
+              val (p0, p1) =
+                if scala.util.Random.nextBoolean() then (s.player(0).userId, s.player(1).userId)
+                else (s.player(1).userId, s.player(0).userId)
+              create(p0, p1, s.variant, s.clock).map: newSeries =>
+                socket.foreach(_.notifyRematchTaken(seriesId, newSeries.id))
+                Some(newSeries.id)
+            else if s.rematchOfferedBy.contains(idx) then
+              fuccess(None) // Already offering
+            else
+              // First offer
+              val updated = s.offerRematch(idx)
+              repo.update(updated).map: _ =>
+                socket.foreach(_.notifyRematchOffer(seriesId, idx))
+                None
+
 // Events
 case class SeriesCreated(s: Series)
 case class SeriesAborted(s: Series)

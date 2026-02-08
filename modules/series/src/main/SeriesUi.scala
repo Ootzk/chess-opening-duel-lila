@@ -93,3 +93,16 @@ final class SeriesUi(helpers: Helpers):
           div("Loading...")
         )
       )
+
+  // Finished page - Snabbdom renders the finished view
+  def finished(s: Series, seriesJson: JsObject, socketVersion: SocketVersion)(using Context): Page =
+    Page("Opening Duel - Series Finished")
+      .css("series.pick")
+      .js(pageModule(s, seriesJson, Vector.empty, socketVersion))
+      .csp(_.withWebAssembly)
+      .flag(_.zoom)
+      .body(
+        main(cls := "series-pick")(
+          div("Loading...")
+        )
+      )
