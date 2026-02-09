@@ -56,6 +56,7 @@ export interface SeriesData {
   finished: boolean;
   winner?: number; // 0 or 1
   rematchOfferedBy?: number; // 0 or 1
+  forfeitBy?: number; // 0 or 1 (player who forfeited/disconnected)
 }
 
 export interface PickConfig {
