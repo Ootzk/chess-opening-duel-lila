@@ -282,14 +282,21 @@ final class SeriesApi(
                   socketNotifyConfirmed(seriesId, idx, "bans")
                   Some(confirmed)
 
-  // ===== Game 1 시작 =====
+  // ===== 랜덤 오프닝 게임 시작 (공통) =====
 
   private def startGame1(s: Series): Fu[Option[Series]] =
-    val allBans = s.allBans
-    if allBans.isEmpty then fuccess(None)
+    startRandomGame(s, s.allBans, oldGameId = None)
+
+  /** 랜덤 오프닝 선택 → RandomSelecting → 게임 생성 */
+  private def startRandomGame(
+      s: Series,
+      pool: List[SeriesOpening],
+      oldGameId: Option[GameId]
+  ): Fu[Option[Series]] =
+    if pool.isEmpty then fuccess(None)
     else
-      val selected = scala.util.Random.shuffle(allBans).head
-      val round = 1
+      val selected = scala.util.Random.shuffle(pool).head
+      val round = s.currentRound
       val withOpening = s.markOpeningUsed(selected.id, round, SelectionMethod.SystemRandom)
       val inRandomSelecting = withOpening.setPhase(Series.Phase.RandomSelecting)
 
@@ -304,7 +311,9 @@ final class SeriesApi(
         _ <- repo.update(withGame)
         _ <- onStart.exec(game.id)
       yield
-        Bus.pub(SeriesPhaseChanged(withGame))
+        oldGameId match
+          case None      => Bus.pub(SeriesPhaseChanged(withGame))
+          case Some(gId) => Bus.pub(SeriesDrawRandomSelecting(withGame, gId))
         Some(withGame)
 
   // ===== 게임 종료 처리 =====
@@ -349,7 +358,6 @@ final class SeriesApi(
 
   private def handleDraw(s: Series, oldGameId: GameId): Funit =
     val unusedBans = s.unusedBans
-
     if unusedBans.isEmpty then
       // 밴 오프닝이 모두 소진되면 시리즈 종료 (무승부 처리)
       val finished = s.copy(
@@ -359,24 +367,7 @@ final class SeriesApi(
       )
       repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
     else
-      val selected = scala.util.Random.shuffle(unusedBans).head
-      val round = s.currentRound
-      val withOpening = s.markOpeningUsed(selected.id, round, SelectionMethod.SystemRandom)
-
-      for
-        game <- createGame(withOpening, round, selected)
-        withGame = withOpening
-          .addGame(SeriesGame(
-            gameId = game.id,
-            round = round,
-            openingId = selected.id,
-            whitePlayerIndex = withOpening.whitePlayerIndex(round)
-          ))
-          .setPhase(Series.Phase.RandomSelecting)
-        _ <- repo.update(withGame)
-        _ <- onStart.exec(game.id)
-        _ = Bus.pub(SeriesDrawRandomSelecting(withGame, oldGameId))
-      yield ()
+      startRandomGame(s, unusedBans, Some(oldGameId)).void
 
   // ===== Selecting Phase: 패자가 오프닝 선택 =====
 
