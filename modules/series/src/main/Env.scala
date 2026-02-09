@@ -80,7 +80,17 @@ final class Env(
   Bus.sub[lila.core.game.FinishGame]:
     case lila.core.game.FinishGame(game, _) =>
       game.metadata.seriesId.foreach: seriesId =>
-        api.finishGame(seriesId, game.id, game.winnerUserId)
+        // rageQuit (disconnect) = Status.Timeout with a winner
+        // normal clock expiry = Status.Outoftime (not forfeit)
+        val isRageQuit = game.status == chess.Status.Timeout && game.winner.isDefined
+        // Game aborted in series = player didn't make their move (disconnected)
+        // turnColor = the side that was supposed to move but didn't → they forfeit
+        val isAbortForfeit = game.status == chess.Status.Aborted
+        val isDisconnectForfeit = isRageQuit || isAbortForfeit
+        val effectiveWinnerId =
+          if isAbortForfeit then game.player(!game.turnColor).userId
+          else game.winnerUserId
+        api.finishGame(seriesId, game.id, effectiveWinnerId, isDisconnectForfeit)
 
   // When a series game finishes but series continues (Game 1 only)
   // Game 2+ with winner goes to Selecting, Game 2+ draw goes to RandomSelecting

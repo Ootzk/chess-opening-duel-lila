@@ -54,6 +54,7 @@ final class SeriesJson(
           else None
         })
         .add("rematchOfferedBy" -> s.rematchOfferedBy)
+        .add("forfeitBy" -> s.forfeitBy)
 
   def roundInfo(s: Series): JsObject =
     Json.obj(

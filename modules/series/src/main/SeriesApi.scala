@@ -309,7 +309,12 @@ final class SeriesApi(
 
   // ===== 게임 종료 처리 =====
 
-  def finishGame(seriesId: SeriesId, gameId: GameId, winnerId: Option[UserId]): Funit =
+  def finishGame(
+      seriesId: SeriesId,
+      gameId: GameId,
+      winnerId: Option[UserId],
+      isDisconnectForfeit: Boolean = false
+  ): Funit =
     repo.byId(seriesId).flatMap:
       case None => funit
       case Some(s) =>
@@ -324,6 +329,16 @@ final class SeriesApi(
             if updated.isFinished then
               val finished = updated.setPhase(Series.Phase.Finished)
               repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
+            else if isDisconnectForfeit && winnerIndex.isDefined then
+              // 상대 disconnect로 게임 종료 → 시리즈 전체 forfeit
+              val loserIdx = 1 - winnerIndex.get
+              val forfeited = updated.copy(
+                forfeitBy = Some(loserIdx),
+                phase = Series.Phase.Finished,
+                status = Series.Status.Finished,
+                finishedAt = Some(nowInstant)
+              )
+              repo.update(forfeited).map(_ => Bus.pub(SeriesFinished(forfeited)))
             else if result == GameResult.Draw then
               handleDraw(updated, gameId)
             else
