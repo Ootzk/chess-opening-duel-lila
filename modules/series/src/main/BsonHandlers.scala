@@ -20,31 +20,34 @@ object BsonHandlers:
           name <- doc.getAsTry[String]("n")
           fen <- doc.getAsTry[String]("f")
           url <- doc.getAsTry[String]("u")
-        yield OpeningPreset(name, Fen.Full(fen), url)
+          color <- doc.getAsTry[Boolean]("c") // true=White, false=Black
+        yield OpeningPreset(name, Fen.Full(fen), url, if color then chess.Color.White else chess.Color.Black)
       case _ => scala.util.Failure(new Exception("Expected BSONDocument for OpeningPreset"))
 
     def writeTry(op: OpeningPreset) = scala.util.Success(BSONDocument(
       "n" -> op.name,
       "f" -> op.fen.value,
-      "u" -> op.url
+      "u" -> op.url,
+      "c" -> (op.ownerColor == chess.Color.White)
     ))
 
-  // OpeningSource
+  // OpeningSource (Neutral → Pick for backward compat)
   given BSONHandler[OpeningSource] = quickHandler[OpeningSource](
     { case BSONString("pick") => OpeningSource.Pick
-      case BSONString("neutral") => OpeningSource.Neutral
+      case BSONString("neutral") => OpeningSource.Pick // 하위 호환
       case _ => OpeningSource.Ban },
     { case OpeningSource.Pick => BSONString("pick")
-      case OpeningSource.Ban => BSONString("ban")
-      case OpeningSource.Neutral => BSONString("neutral") }
+      case OpeningSource.Ban => BSONString("ban") }
   )
 
   // SelectionMethod
   given BSONHandler[SelectionMethod] = quickHandler[SelectionMethod](
-    { case BSONString("loser") => SelectionMethod.LoserChoice
+    { case BSONString("winner") => SelectionMethod.WinnerChoice
+      case BSONString("loser") => SelectionMethod.LoserChoice
       case BSONString("random") => SelectionMethod.SystemRandom
       case _ => SelectionMethod.Timeout },
-    { case SelectionMethod.LoserChoice => BSONString("loser")
+    { case SelectionMethod.WinnerChoice => BSONString("winner")
+      case SelectionMethod.LoserChoice => BSONString("loser")
       case SelectionMethod.SystemRandom => BSONString("random")
       case SelectionMethod.Timeout => BSONString("timeout") }
   )
@@ -60,17 +63,19 @@ object BsonHandlers:
         name <- doc.getAsTry[String]("n")
         fen <- doc.getAsTry[String]("f")
         url = doc.getAsOpt[String]("u")
+        ownerColor = if doc.getAsOpt[Boolean]("c").getOrElse(true) then chess.Color.White else chess.Color.Black
         source <- doc.getAsTry[OpeningSource]("s")
         ownerIndex <- doc.getAsTry[Int]("o")
         usedInRound = doc.getAsOpt[Int]("r")
         selectedBy = doc.getAsOpt[SelectionMethod]("m")
-      yield SeriesOpening(id, name, Fen.Full(fen), url, source, ownerIndex, usedInRound, selectedBy)
+      yield SeriesOpening(id, name, Fen.Full(fen), url, ownerColor, source, ownerIndex, usedInRound, selectedBy)
 
     def writeTry(o: SeriesOpening) = scala.util.Success($doc(
       "i" -> o.id,
       "n" -> o.name,
       "f" -> o.fen.value,
       "u" -> o.url,
+      "c" -> (o.ownerColor == chess.Color.White),
       "s" -> o.source,
       "o" -> o.ownerIndex,
       "r" -> o.usedInRound,

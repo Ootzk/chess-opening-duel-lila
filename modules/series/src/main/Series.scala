@@ -84,26 +84,16 @@ case class Series(
     val bannedNames = bannedByOpponent.map(_.name).toSet
     myPicks.filterNot(p => bannedNames.contains(p.name) || p.isUsed)
 
-  /** 랜덤 선택 풀: 밴 + 중립 오프닝 중 미사용 */
-  def unusedBans: List[SeriesOpening] =
-    openings.filter(o => (o.isBan || o.isNeutral) && !o.isUsed)
+  /** 양측 남은 픽 전체 (미사용만) */
+  def unusedRemainingPicks: List[SeriesOpening] =
+    remainingPicks(0) ++ remainingPicks(1)
 
-  /** 전체 랜덤 선택 풀: 밴 + 중립 오프닝 */
-  def allBans: List[SeriesOpening] =
-    openings.filter(o => o.isBan || o.isNeutral)
+  // ===== 게임 색상 배정 (ownerColor 기반) =====
 
-  def bannedOpenings: List[SeriesOpening] = openings.filter(_.isBan)
-
-  def neutralOpening: Option[SeriesOpening] = openings.find(_.isNeutral)
-
-  def addNeutralOpening: Series =
-    if neutralOpening.isDefined then this
-    else copy(openings = openings :+ SeriesOpening.makeNeutral())
-
-  // ===== 게임 색상 배정 =====
-
-  def whitePlayerIndex(round: Int): Int =
-    if round % 2 == 1 then 0 else 1
+  /** ownerColor 기반 White 결정: 픽한 사람이 ownerColor 진영을 맡음 */
+  def whitePlayerForOpening(opening: SeriesOpening): Int =
+    if opening.ownerColor == chess.Color.White then opening.ownerIndex
+    else 1 - opening.ownerIndex
 
   def currentGame: Option[SeriesGame] =
     games.lastOption.filter(_.result.isEmpty)
@@ -119,6 +109,13 @@ case class Series(
       game.result.flatMap:
         case GameResult.WhiteWins => Some(1 - game.whitePlayerIndex)
         case GameResult.BlackWins => Some(game.whitePlayerIndex)
+        case GameResult.Draw => None
+
+  def lastGameWinner: Option[Int] =
+    lastFinishedGame.flatMap: game =>
+      game.result.flatMap:
+        case GameResult.WhiteWins => Some(game.whitePlayerIndex)
+        case GameResult.BlackWins => Some(1 - game.whitePlayerIndex)
         case GameResult.Draw => None
 
   def openingForRound(round: Int): Option[SeriesOpening] =

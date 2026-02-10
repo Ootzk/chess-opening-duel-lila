@@ -71,7 +71,8 @@ final class SeriesUi(helpers: Helpers):
         "presets" -> presets.map(p => Json.obj(
           "name" -> p.name,
           "fen" -> p.fen.value,
-          "url" -> p.url
+          "url" -> p.url,
+          "ownerColor" -> p.ownerColor.name
         )),
         "series" -> seriesJson,
         "i18n" -> Json.obj(),

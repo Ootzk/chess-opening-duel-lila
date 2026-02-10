@@ -4,9 +4,7 @@ import {
   Status as StatusId,
   getMyPicks,
   getOpponentPicks,
-  getMyBans,
   getRemainingPicks,
-  getAllBans,
 } from './interfaces';
 
 export default class SeriesPickCtrl {
@@ -92,7 +90,7 @@ export default class SeriesPickCtrl {
     myPicks.forEach(p => this.selectedPicks.add(p.name));
 
     // Load existing bans
-    const myBans = getMyBans(this.series);
+    const myBans = this.series.openings.filter(o => o.owner === povIndex && o.source === 'ban');
     myBans.forEach(b => this.selectedBans.add(b.name));
 
     // Load confirmed state
@@ -140,12 +138,12 @@ export default class SeriesPickCtrl {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
     }
-    // Selecting phase: 타임아웃 시 랜덤 선택 (패자만)
+    // Selecting phase: 타임아웃 시 랜덤 선택 (승자만)
     if (this.isSelecting) {
       if (this.isMyTurnToSelect && !this.myConfirmed) {
         this.selectRandomOpening();
       }
-      // 승자는 서버 타임아웃이 처리 (forfeit/random)
+      // 패자는 서버 타임아웃이 처리 (forfeit/random)
       return;
     }
     // Pick/Ban phase: 타임아웃 시 현재 선택 + 랜덤 채우기 + 자동 확정
@@ -280,7 +278,7 @@ export default class SeriesPickCtrl {
     this.countdownSeconds = 3;
   }
 
-  // Selecting phase: 상대가 선택 중인지 (내가 승자인지)
+  // Selecting phase: 상대가 선택 중인지 (내가 패자인지)
   get isWaitingForOpponentSelect(): boolean {
     if (!this.isSelecting) return false;
     const povIndex = this.series.povIndex;
@@ -288,7 +286,7 @@ export default class SeriesPickCtrl {
     return selectingPlayer !== undefined && selectingPlayer !== povIndex;
   }
 
-  // Selecting phase: 내가 선택해야 하는지 (내가 패자인지)
+  // Selecting phase: 내가 선택해야 하는지 (내가 승자인지)
   get isMyTurnToSelect(): boolean {
     if (!this.isSelecting) return false;
     const povIndex = this.series.povIndex;
@@ -319,12 +317,12 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       // Can only ban from opponent's picks
       const oppPicks = getOpponentPicks(this.series);
-      return oppPicks.map(o => ({ name: o.name, fen: o.fen, url: o.url || '' }));
+      return oppPicks.map(o => ({ name: o.name, fen: o.fen, url: o.url || '', ownerColor: o.ownerColor }));
     } else if (this.isSelecting) {
-      // Both players see the loser's remaining picks
+      // Both players see the winner's remaining picks
       const selectingIdx = this.series.selectingPlayer ?? 0;
       const remaining = getRemainingPicks(this.series, selectingIdx);
-      return remaining.map(o => ({ name: o.name, fen: o.fen, url: o.url || '' }));
+      return remaining.map(o => ({ name: o.name, fen: o.fen, url: o.url || '', ownerColor: o.ownerColor }));
     }
     return [];
   }
@@ -346,7 +344,7 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       return this.isOpponentPick(name) && !this.isSelected(name) && this.selectedBans.size < this.maxBans;
     } else if (this.isSelecting) {
-      // Only the loser can select
+      // Only the winner can select
       if (!this.isMyTurnToSelect) return false;
       return this.availableOpenings.some(o => o.name === name);
     }
@@ -499,7 +497,7 @@ export default class SeriesPickCtrl {
       } else if (!this.isBothConfirmed && this.countdownActive) {
         this.stopCountdown();
       }
-      // Selecting: winner sees countdown when loser confirms
+      // Selecting: loser sees countdown when winner confirms
       if (this.isSelecting && this.isWaitingForOpponentSelect) {
         if (this.opponentConfirmed && !this.countdownActive) {
           this.startCountdown();
@@ -706,7 +704,7 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       return this.selectedBans.size === this.maxBans; // 정확히 2개
     } else if (this.isSelecting) {
-      // Only the loser can confirm in Selecting phase
+      // Only the winner can confirm in Selecting phase
       return this.isMyTurnToSelect && this.currentSelections.size === 1;
     }
     return false;
@@ -763,8 +761,11 @@ export default class SeriesPickCtrl {
   private startGame(): void {
     // Game is already created during confirmBans, just redirect
     const gameId = this.series.currentGame;
-    const povColor = this.series.povIndex === 0 ? 'white' : 'black';
     if (gameId) {
+      // Determine POV color from game's whitePlayer field (ownerColor-based)
+      const currentGameData = this.series.games.find(g => g.gameId === gameId);
+      const whitePlayer = currentGameData?.whitePlayer ?? 0;
+      const povColor = this.series.povIndex === whitePlayer ? 'white' : 'black';
       window.location.href = `/${gameId}/${povColor}`;
     } else {
       // Fallback: WebSocket should notify us when game is ready

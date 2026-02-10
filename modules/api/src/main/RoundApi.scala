@@ -325,7 +325,8 @@ final private[api] class RoundApi(
               "name"        -> op.name,
               "fen"         -> op.fen.value,
               "url"         -> op.url,
-              "source"      -> (if op.isPick then "pick" else if op.isNeutral then "neutral" else "ban"),
+              "source"      -> (if op.isPick then "pick" else "ban"),
+              "ownerColor"  -> op.ownerColor.name,
               "owner"       -> op.ownerIndex,
               "usedInRound" -> op.usedInRound,
               "selectedBy"  -> op.selectedBy.map(_.toString.toLowerCase)

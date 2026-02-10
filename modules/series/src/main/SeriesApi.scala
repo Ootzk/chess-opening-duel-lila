@@ -238,8 +238,7 @@ final class SeriesApi(
       case true =>
         repo.byId(seriesId).foreach:
           case Some(s) if s.bothBansConfirmed =>
-            val withNeutral = s.addNeutralOpening
-            startGame1(withNeutral)
+            startGame1(s)
           case _ => ()
       case false => () // Already transitioned
 
@@ -275,8 +274,7 @@ final class SeriesApi(
               // 확정 처리
               val confirmed = withBans.updatePlayer(idx, _.confirmBans)
               if confirmed.bothBansConfirmed then
-                val withNeutral = confirmed.addNeutralOpening
-                startGame1(withNeutral)
+                startGame1(confirmed)
               else
                 repo.update(confirmed).map: _ =>
                   socketNotifyConfirmed(seriesId, idx, "bans")
@@ -285,7 +283,7 @@ final class SeriesApi(
   // ===== 랜덤 오프닝 게임 시작 (공통) =====
 
   private def startGame1(s: Series): Fu[Option[Series]] =
-    startRandomGame(s, s.allBans, oldGameId = None)
+    startRandomGame(s, s.unusedRemainingPicks, oldGameId = None)
 
   /** 랜덤 오프닝 선택 → RandomSelecting → 게임 생성 */
   private def startRandomGame(
@@ -306,7 +304,7 @@ final class SeriesApi(
           gameId = game.id,
           round = round,
           openingId = selected.id,
-          whitePlayerIndex = inRandomSelecting.whitePlayerIndex(round)
+          whitePlayerIndex = inRandomSelecting.whitePlayerForOpening(selected)
         ))
         _ <- repo.update(withGame)
         _ <- onStart.exec(game.id)
@@ -357,9 +355,8 @@ final class SeriesApi(
   // ===== 무승부 처리 =====
 
   private def handleDraw(s: Series, oldGameId: GameId): Funit =
-    val unusedBans = s.unusedBans
-    if unusedBans.isEmpty then
-      // 밴 오프닝이 모두 소진되면 시리즈 종료 (무승부 처리)
+    val pool = s.unusedRemainingPicks
+    if pool.isEmpty then
       val finished = s.copy(
         phase = Series.Phase.Finished,
         status = Series.Status.Finished,
@@ -367,9 +364,9 @@ final class SeriesApi(
       )
       repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
     else
-      startRandomGame(s, unusedBans, Some(oldGameId)).void
+      startRandomGame(s, pool, Some(oldGameId)).void
 
-  // ===== Selecting Phase: 패자가 오프닝 선택 =====
+  // ===== Selecting Phase: 승자가 오프닝 선택 =====
 
   /** 실시간 선택 동기화 — DB에 저장하지 않고 WS로만 브로드캐스트 */
   def setSelectingPick(seriesId: SeriesId, userId: UserId, presetName: Option[String]): Fu[Option[Series]] =
@@ -380,7 +377,7 @@ final class SeriesApi(
           case None => fuccess(None)
           case Some(idx) =>
             if s.phase != Series.Phase.Selecting then fuccess(None)
-            else if s.lastGameLoser != Some(idx) then fuccess(None)
+            else if s.lastGameWinner != Some(idx) then fuccess(None)
             else
               socket.foreach(_.notifySelectingPick(seriesId, presetName))
               fuccess(Some(s))
@@ -394,7 +391,7 @@ final class SeriesApi(
           case None => fuccess(None)
           case Some(idx) =>
             if s.phase != Series.Phase.Selecting then fuccess(None)
-            else if s.lastGameLoser != Some(idx) then fuccess(None)
+            else if s.lastGameWinner != Some(idx) then fuccess(None)
             else if s.player(idx).confirmedSelecting then fuccess(Some(s))
             else
               val remaining = s.remainingPicks(idx)
@@ -429,15 +426,15 @@ final class SeriesApi(
   private def startSelectingDelayed(seriesId: SeriesId): Unit =
     repo.byId(seriesId).foreach:
       case Some(s) if s.phase == Series.Phase.Selecting =>
-        s.lastGameLoser match
-          case Some(loserIdx) if s.player(loserIdx).confirmedSelecting =>
-            s.player(loserIdx).selectingPick match
+        s.lastGameWinner match
+          case Some(winnerIdx) if s.player(winnerIdx).confirmedSelecting =>
+            s.player(winnerIdx).selectingPick match
               case Some(pickName) =>
-                val remaining = s.remainingPicks(loserIdx)
+                val remaining = s.remainingPicks(winnerIdx)
                 remaining.find(_.name == pickName).foreach: opening =>
                   val round = s.currentRound
-                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
-                  val clearSelecting = withOpening.updatePlayer(loserIdx, _.clearSelecting)
+                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.WinnerChoice)
+                  val clearSelecting = withOpening.updatePlayer(winnerIdx, _.clearSelecting)
 
                   for
                     game <- createGame(clearSelecting, round, opening)
@@ -446,7 +443,7 @@ final class SeriesApi(
                         gameId = game.id,
                         round = round,
                         openingId = opening.id,
-                        whitePlayerIndex = clearSelecting.whitePlayerIndex(round)
+                        whitePlayerIndex = clearSelecting.whitePlayerForOpening(opening)
                       ))
                       .setPhase(Series.Phase.Playing)
                     _ <- repo.update(withGame)
@@ -466,14 +463,14 @@ final class SeriesApi(
           case None => fuccess(None)
           case Some(idx) =>
             if s.phase != Series.Phase.Selecting then fuccess(None)
-            else if s.lastGameLoser != Some(idx) then fuccess(None)
+            else if s.lastGameWinner != Some(idx) then fuccess(None)
             else
               val remaining = s.remainingPicks(idx)
               remaining.find(_.name == preset.name) match
                 case None => fuccess(None)
                 case Some(opening) =>
                   val round = s.currentRound
-                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
+                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.WinnerChoice)
                   val clearSelecting = withOpening.updatePlayer(idx, _.clearSelecting)
 
                   for
@@ -483,7 +480,7 @@ final class SeriesApi(
                         gameId = game.id,
                         round = round,
                         openingId = opening.id,
-                        whitePlayerIndex = clearSelecting.whitePlayerIndex(round)
+                        whitePlayerIndex = clearSelecting.whitePlayerForOpening(opening)
                       ))
                       .setPhase(Series.Phase.Playing)
                     _ <- repo.update(withGame)
@@ -568,8 +565,7 @@ final class SeriesApi(
                 confirmed
             .flatMap: updated =>
               if updated.bothBansConfirmed then
-                val withNeutral = updated.addNeutralOpening
-                startGame1(withNeutral)
+                startGame1(updated)
               else repo.update(updated).inject(Some(updated))
 
   def forfeitSeries(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
@@ -614,11 +610,11 @@ final class SeriesApi(
       Some(forfeited)
 
   private def serverTimeoutSelecting(s: Series): Fu[Option[Series]] =
-    s.lastGameLoser match
+    s.lastGameWinner match
       case None => fuccess(Some(s))
-      case Some(loserIdx) =>
+      case Some(winnerIdx) =>
         // 이미 confirmedSelecting이면 3초 스케줄이 처리 중
-        if s.player(loserIdx).confirmedSelecting then fuccess(Some(s))
+        if s.player(winnerIdx).confirmedSelecting then fuccess(Some(s))
         else
           val p0dc = s.player(0).isDisconnected
           val p1dc = s.player(1).isDisconnected
@@ -637,14 +633,14 @@ final class SeriesApi(
       case Some(s) =>
         if s.phase != Series.Phase.Selecting then fuccess(None)
         else
-          s.lastGameLoser match
+          s.lastGameWinner match
             case None => fuccess(None)
-            case Some(loserIdx) =>
-              val remaining = s.remainingPicks(loserIdx)
+            case Some(winnerIdx) =>
+              val remaining = s.remainingPicks(winnerIdx)
               if remaining.isEmpty then
-                val unusedBans = s.unusedBans
-                if unusedBans.isEmpty then fuccess(None)
-                else selectRandomFromPool(s, unusedBans, SelectionMethod.Timeout)
+                val allRemaining = s.unusedRemainingPicks
+                if allRemaining.isEmpty then fuccess(None)
+                else selectRandomFromPool(s, allRemaining, SelectionMethod.Timeout)
               else
                 selectRandomFromPool(s, remaining, SelectionMethod.Timeout)
 
@@ -664,7 +660,7 @@ final class SeriesApi(
           gameId = game.id,
           round = round,
           openingId = selected.id,
-          whitePlayerIndex = withOpening.whitePlayerIndex(round)
+          whitePlayerIndex = withOpening.whitePlayerForOpening(selected)
         ))
         .setPhase(Series.Phase.Playing)
       _ <- repo.update(withGame)
@@ -703,7 +699,7 @@ final class SeriesApi(
   // ===== 게임 생성 =====
 
   private def createGame(s: Series, round: Int, opening: SeriesOpening): Fu[Game] =
-    val whiteIdx = s.whitePlayerIndex(round)
+    val whiteIdx = s.whitePlayerForOpening(opening)
     val blackIdx = 1 - whiteIdx
     for
       whiteUser <- userApi.byIdWithPerf(s.player(whiteIdx).userId, s.perfType)

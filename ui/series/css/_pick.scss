@@ -80,6 +80,31 @@
       border-style: dashed;
       box-shadow: 0 0 8px rgba($c-accent, 0.4);
     }
+
+    // ownerColor background
+    &.owner-white {
+      background: hsl(60, 10%, 90%);
+
+      .opening-name {
+        color: hsl(0, 0%, 25%);
+      }
+
+      &:hover:not(.disabled) {
+        background: hsl(60, 10%, 82%);
+      }
+    }
+
+    &.owner-black {
+      background: hsl(0, 0%, 22%);
+
+      .opening-name {
+        color: hsl(0, 0%, 85%);
+      }
+
+      &:hover:not(.disabled) {
+        background: hsl(0, 0%, 28%);
+      }
+    }
   }
 
   &__board {
@@ -211,36 +236,14 @@
   }
 }
 
-.series-pick__random-selecting-boxes {
-  display: flex;
-  gap: 2rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
+// Pick pool grid for RandomSelecting phase
+.series-pick__pick-pool {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $block-gap;
 
-.series-pick__ban-box {
-  background: $c-bg-box;
-  @extend %box-radius;
-  padding: 1.5rem;
-  min-width: 300px;
-}
-
-.series-pick__ban-header {
-  font-size: 1.2rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
-  text-align: center;
-  color: $c-font-dim;
-}
-
-.series-pick__ban-openings {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-
-  // Give explicit width to opening cards in flex container
-  .series-pick__opening {
-    width: 150px;
+  @media (max-width: 600px) {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -294,43 +297,6 @@
   color: $c-font-dim;
 }
 
-// Neutral opening box styles
-.series-pick__neutral-box {
-  background: $c-bg-box;
-  @extend %box-radius;
-  padding: 1.5rem;
-  min-width: 180px;
-  border: 2px solid $c-accent;
-
-  &.used {
-    opacity: 0.5;
-    border-color: $c-font-dimmer;
-  }
-}
-
-.series-pick__neutral-header {
-  font-size: 1.2rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
-  text-align: center;
-  color: $c-accent;
-}
-
-.series-pick__neutral-openings {
-  display: flex;
-  justify-content: center;
-
-  .series-pick__opening {
-    width: 150px;
-  }
-}
-
-.series-pick__neutral-empty {
-  text-align: center;
-  color: $c-font-dimmer;
-  font-style: italic;
-  padding: 1rem;
-}
 
 // Actions layout (left: buttons, right: opponent status)
 .series-pick__actions {

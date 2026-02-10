@@ -50,7 +50,7 @@ final class SeriesJson(
         .add("currentGame" -> s.currentGameId.map(_.value))
         .add("timeLeft" -> timeLeft)
         .add("selectingPlayer" -> {
-          if s.phase == Series.Phase.Selecting then s.lastGameLoser
+          if s.phase == Series.Phase.Selecting then s.lastGameWinner
           else None
         })
         .add("rematchOfferedBy" -> s.rematchOfferedBy)
@@ -85,7 +85,8 @@ final class SeriesJson(
     "name" -> o.name,
     "fen" -> o.fen.value,
     "url" -> o.url,
-    "source" -> (if o.isPick then "pick" else if o.isNeutral then "neutral" else "ban"),
+    "ownerColor" -> o.ownerColor.name,
+    "source" -> (if o.isPick then "pick" else "ban"),
     "owner" -> o.ownerIndex,
     "usedInRound" -> o.usedInRound,
     "selectedBy" -> o.selectedBy.map(_.toString.toLowerCase)

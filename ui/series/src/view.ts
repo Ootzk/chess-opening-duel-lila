@@ -2,7 +2,7 @@ import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type SeriesPickCtrl from './ctrl';
 import type { OpeningPreset, SeriesOpening, SeriesGame, SeriesPlayer } from './interfaces';
-import { getOpponentBans, getMyBans, getNeutralOpening } from './interfaces';
+import { getUnusedRemainingPicks } from './interfaces';
 import { userLink } from 'lib/view/userLink';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
@@ -21,71 +21,34 @@ export default function view(ctrl: SeriesPickCtrl): VNode {
 }
 
 function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
-  const povIndex = ctrl.series.povIndex ?? 0;
-  const oppIndex = 1 - povIndex;
-
-  const myBans = getMyBans(ctrl.series);
-  const oppBans = getOpponentBans(ctrl.series);
-  const neutral = getNeutralOpening(ctrl.series);
-
-  const myName = ctrl.series.players[povIndex].user?.name || `Player ${povIndex + 1}`;
-  const oppName = ctrl.series.players[oppIndex].user?.name || `Player ${oppIndex + 1}`;
+  const pool = getUnusedRemainingPicks(ctrl.series);
   const gameNum = ctrl.series.round;
+
+  // Find which opening was selected for the current round's game
+  const currentRoundGame = ctrl.series.games.find(g => g.round === gameNum);
 
   return h('div.series-pick.random-selecting', [
     h('div.series-pick__header', [
       h('h1', `Game ${gameNum} Starting...`),
       h('div.series-pick__countdown', String(ctrl.randomSelectingCountdown)),
     ]),
-    h('div.series-pick__random-selecting-boxes', [
-      renderBanBox(ctrl, myName, myBans),
-      neutral ? renderNeutralBox(ctrl, neutral) : null,
-      renderBanBox(ctrl, oppName, oppBans),
-    ]),
+    h(
+      'div.series-pick__pick-pool',
+      pool.map(opening => renderRandomSelectingOpening(ctrl, opening, currentRoundGame?.openingId)),
+    ),
   ]);
 }
 
-function renderBanBox(ctrl: SeriesPickCtrl, playerName: string, bans: SeriesOpening[]): VNode {
-  // Filter out THIS specific opening if it was used in a PREVIOUS round
-  // (Check the opening's own usedInRound, not by name lookup)
-  const currentRound = Number(ctrl.series.round);
-  const visibleBans = bans.filter(b => {
-    const usedIn = b.usedInRound;
-    if (usedIn === undefined || usedIn === null) return true; // Not used yet
-    return Number(usedIn) >= currentRound; // Show if used in current round or later
-  });
-
-  return h('div.series-pick__ban-box', [
-    h('div.series-pick__ban-header', `${playerName}'s Bans`),
-    h('div.series-pick__ban-openings', visibleBans.map(opening => renderRandomSelectingOpening(ctrl, opening))),
-  ]);
-}
-
-function renderNeutralBox(ctrl: SeriesPickCtrl, neutral: SeriesOpening): VNode {
-  // Check if neutral was used in a previous round
-  const currentRound = Number(ctrl.series.round);
-  const usedIn = neutral.usedInRound;
-  const isVisible = usedIn === undefined || usedIn === null || Number(usedIn) >= currentRound;
-
-  if (!isVisible) {
-    return h('div.series-pick__neutral-box.used', [
-      h('div.series-pick__neutral-header', 'Neutral'),
-    ]);
-  }
-
-  return h('div.series-pick__neutral-box', [
-    h('div.series-pick__neutral-header', 'Neutral'),
-    h('div.series-pick__neutral-openings', [renderRandomSelectingOpening(ctrl, neutral)]),
-  ]);
-}
-
-function renderRandomSelectingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpening): VNode {
-  // Highlight the opening selected for current round (use Number() for type safety)
-  const currentRound = Number(ctrl.series.round);
-  const isHighlighted = Number(opening.usedInRound) === currentRound;
+function renderRandomSelectingOpening(
+  ctrl: SeriesPickCtrl,
+  opening: SeriesOpening,
+  highlightedId?: string,
+): VNode {
+  const isHighlighted = highlightedId === opening.id;
+  const ownerColorClass = `owner-${opening.ownerColor || 'white'}`;
 
   return h(
-    'div.series-pick__opening',
+    `div.series-pick__opening.${ownerColorClass}`,
     {
       class: { highlighted: isHighlighted },
       attrs: { 'data-name': opening.name, 'data-fen': opening.fen },
@@ -94,7 +57,7 @@ function renderRandomSelectingOpening(ctrl: SeriesPickCtrl, opening: SeriesOpeni
       h(
         'div.series-pick__board.mini-board.mini-board--init.cg-wrap.is2d',
         {
-          attrs: { 'data-state': `${opening.fen},white,` },
+          attrs: { 'data-state': `${opening.fen},${opening.ownerColor || 'white'},` },
         },
         [h('cg-container', [h('cg-board')])],
       ),
@@ -134,11 +97,12 @@ function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
   const canSelect = ctrl.canSelect(preset.name);
   const isOpponentSelecting = ctrl.isSelecting && !ctrl.isMyTurnToSelect && preset.name === ctrl.opponentSelectingPick;
   const isDisabled = ctrl.isSelecting
-    ? !ctrl.isMyTurnToSelect || ctrl.myConfirmed  // Winner can't click; confirmed loser can't click
+    ? !ctrl.isMyTurnToSelect || ctrl.myConfirmed  // Loser can't click; confirmed winner can't click
     : ctrl.myConfirmed || (!isSelected && !canSelect);
+  const ownerColorClass = preset.ownerColor ? `owner-${preset.ownerColor}` : '';
 
   return h(
-    'div.series-pick__opening',
+    `div.series-pick__opening${ownerColorClass ? '.' + ownerColorClass : ''}`,
     {
       class: {
         selected: isSelected,
@@ -164,7 +128,7 @@ function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
         'div.series-pick__board.mini-board.mini-board--init.cg-wrap.is2d',
         {
           attrs: {
-            'data-state': `${preset.fen},white,`,
+            'data-state': `${preset.fen},${preset.ownerColor || 'white'},`,
           },
         },
         [h('cg-container', [h('cg-board')])],
@@ -229,11 +193,11 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
 
     if (ctrl.isSelecting) {
       if (ctrl.isMyTurnToSelect) {
-        // I'm the loser selecting — show opponent (winner) status
+        // I'm the winner selecting — show opponent (loser) status
         statusClass = 'waiting';
         statusText = ' is watching...';
       } else {
-        // I'm the winner — show opponent (loser) status
+        // I'm the loser — show opponent (winner) status
         statusClass = ctrl.opponentConfirmed ? 'ready' : 'waiting';
         statusText = ctrl.opponentConfirmed ? ' confirmed!' : ' is selecting...';
       }

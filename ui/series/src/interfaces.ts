@@ -2,17 +2,21 @@ export interface OpeningPreset {
   name: string;
   fen: string;
   url: string;
+  ownerColor?: Color;
 }
+
+export type Color = 'white' | 'black';
 
 export interface SeriesOpening {
   id: string;
   name: string;
   fen: string;
   url?: string;
-  source: 'pick' | 'ban' | 'neutral';
-  owner: number; // 0, 1 (player index), or -1 (neutral)
+  ownerColor: Color;
+  source: 'pick' | 'ban';
+  owner: number; // 0 or 1 (player index)
   usedInRound?: number;
-  selectedBy?: 'loserchoice' | 'systemrandom' | 'timeout';
+  selectedBy?: 'winnerchoice' | 'loserchoice' | 'systemrandom' | 'timeout';
 }
 
 export interface SeriesGame {
@@ -98,17 +102,6 @@ export function getOpponentPicks(data: SeriesData): SeriesOpening[] {
   return data.openings.filter(o => o.owner === oppIndex && o.source === 'pick');
 }
 
-export function getMyBans(data: SeriesData): SeriesOpening[] {
-  if (data.povIndex === undefined) return [];
-  return data.openings.filter(o => o.owner === data.povIndex && o.source === 'ban');
-}
-
-export function getOpponentBans(data: SeriesData): SeriesOpening[] {
-  if (data.povIndex === undefined) return [];
-  const oppIndex = 1 - data.povIndex;
-  return data.openings.filter(o => o.owner === oppIndex && o.source === 'ban');
-}
-
 export function getRemainingPicks(data: SeriesData, playerIndex: number): SeriesOpening[] {
   const picks = data.openings.filter(o => o.owner === playerIndex && o.source === 'pick');
   const oppBans = data.openings.filter(o => o.owner === (1 - playerIndex) && o.source === 'ban');
@@ -116,14 +109,6 @@ export function getRemainingPicks(data: SeriesData, playerIndex: number): Series
   return picks.filter(p => !bannedNames.has(p.name) && !p.usedInRound);
 }
 
-export function getAllBans(data: SeriesData): SeriesOpening[] {
-  return data.openings.filter(o => o.source === 'ban');
-}
-
-export function getUnusedBans(data: SeriesData): SeriesOpening[] {
-  return data.openings.filter(o => o.source === 'ban' && !o.usedInRound);
-}
-
-export function getNeutralOpening(data: SeriesData): SeriesOpening | undefined {
-  return data.openings.find(o => o.source === 'neutral');
+export function getUnusedRemainingPicks(data: SeriesData): SeriesOpening[] {
+  return [...getRemainingPicks(data, 0), ...getRemainingPicks(data, 1)];
 }

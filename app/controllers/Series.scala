@@ -30,8 +30,7 @@ final class Series(env: Env) extends LilaController(env):
         s.currentGameId match
           case Some(gameId) =>
             val povIndex = s.playerIndex(me.userId).getOrElse(0)
-            val round = s.currentRound
-            val isWhite = s.whitePlayerIndex(round) == povIndex
+            val isWhite = s.currentGame.exists(_.whitePlayerIndex == povIndex)
             val povColor = if isWhite then Color.white else Color.black
             Redirect(s"/${gameId}/${povColor.name}")
           case None => Redirect(routes.Series.show(id))
@@ -45,8 +44,8 @@ final class Series(env: Env) extends LilaController(env):
             // 상대의 픽을 표시
             s.picks(1 - povIndex).map(_.toPreset).toVector
           case lila.series.Series.Phase.Selecting =>
-            // 양측 동일: 패자(selectingPlayer)의 remaining picks 표시
-            val selectingIdx = s.lastGameLoser.getOrElse(0)
+            // 양측 동일: 승자(selectingPlayer)의 remaining picks 표시
+            val selectingIdx = s.lastGameWinner.getOrElse(0)
             s.remainingPicks(selectingIdx).map(_.toPreset).toVector
           case _ => OpeningPresets.all
         for
@@ -86,10 +85,7 @@ final class Series(env: Env) extends LilaController(env):
       else
         api.createNextGame(id).map:
           case Some(game) =>
-            val povIndex = s.playerIndex(me.userId).getOrElse(0)
-            val round = s.currentRound
-            val isWhite = s.whitePlayerIndex(round) == povIndex
-            val povColor = if isWhite then Color.white else Color.black
+            val povColor = Pov(game, me).fold(Color.white)(_.color)
             JsonOk(Json.obj("redirect" -> s"/${game.id}/${povColor.name}"))
           case None => JsonOk(Json.obj("redirect" -> routes.Series.show(id).url))
   }
@@ -100,7 +96,8 @@ final class Series(env: Env) extends LilaController(env):
       "presets" -> OpeningPresets.all.map(op => Json.obj(
         "name" -> op.name,
         "fen" -> op.fen.value,
-        "url" -> op.url
+        "url" -> op.url,
+        "ownerColor" -> op.ownerColor.name
       ))
     ))
 
@@ -271,10 +268,7 @@ final class Series(env: Env) extends LilaController(env):
               case Some(opening) =>
                 api.selectNextOpening(id, me.userId, opening).map:
                   case Some(game) =>
-                    val povIndex = s.playerIndex(me.userId).getOrElse(0)
-                    val newRound = s.currentRound
-                    val isWhite = s.whitePlayerIndex(newRound) == povIndex
-                    val povColor = if isWhite then Color.white else Color.black
+                    val povColor = Pov(game, me).fold(Color.white)(_.color)
                     JsonOk(Json.obj(
                       "ok" -> true,
                       "redirect" -> s"/${game.id}/${povColor.name}",
@@ -351,10 +345,7 @@ final class Series(env: Env) extends LilaController(env):
       else
         api.handleSelectingTimeout(id).map:
           case Some(game) =>
-            val povIndex = s.playerIndex(me.userId).getOrElse(0)
-            val newRound = s.currentRound
-            val isWhite = s.whitePlayerIndex(newRound) == povIndex
-            val povColor = if isWhite then Color.white else Color.black
+            val povColor = Pov(game, me).fold(Color.white)(_.color)
             JsonOk(Json.obj(
               "ok" -> true,
               "redirect" -> s"/${game.id}/${povColor.name}"
