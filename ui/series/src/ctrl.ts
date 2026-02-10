@@ -138,7 +138,7 @@ export default class SeriesPickCtrl {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
     }
-    // Selecting phase: 타임아웃 시 랜덤 선택 (승자만)
+    // Selecting phase: 타임아웃 시 랜덤 선택 (패자만)
     if (this.isSelecting) {
       if (this.isMyTurnToSelect && !this.myConfirmed) {
         this.selectRandomOpening();
@@ -286,7 +286,7 @@ export default class SeriesPickCtrl {
     return selectingPlayer !== undefined && selectingPlayer !== povIndex;
   }
 
-  // Selecting phase: 내가 선택해야 하는지 (내가 승자인지)
+  // Selecting phase: 내가 선택해야 하는지 (내가 패자인지)
   get isMyTurnToSelect(): boolean {
     if (!this.isSelecting) return false;
     const povIndex = this.series.povIndex;
@@ -319,7 +319,7 @@ export default class SeriesPickCtrl {
       const oppPicks = getOpponentPicks(this.series);
       return oppPicks.map(o => ({ name: o.name, fen: o.fen, url: o.url || '', ownerColor: o.ownerColor }));
     } else if (this.isSelecting) {
-      // Both players see the winner's remaining picks
+      // Both players see the loser's remaining picks
       const selectingIdx = this.series.selectingPlayer ?? 0;
       const remaining = getRemainingPicks(this.series, selectingIdx);
       return remaining.map(o => ({ name: o.name, fen: o.fen, url: o.url || '', ownerColor: o.ownerColor }));
@@ -344,7 +344,7 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       return this.isOpponentPick(name) && !this.isSelected(name) && this.selectedBans.size < this.maxBans;
     } else if (this.isSelecting) {
-      // Only the winner can select
+      // Only the loser can select
       if (!this.isMyTurnToSelect) return false;
       return this.availableOpenings.some(o => o.name === name);
     }

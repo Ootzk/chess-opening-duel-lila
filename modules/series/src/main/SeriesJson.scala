@@ -50,7 +50,7 @@ final class SeriesJson(
         .add("currentGame" -> s.currentGameId.map(_.value))
         .add("timeLeft" -> timeLeft)
         .add("selectingPlayer" -> {
-          if s.phase == Series.Phase.Selecting then s.lastGameWinner
+          if s.phase == Series.Phase.Selecting then s.lastGameLoser
           else None
         })
         .add("rematchOfferedBy" -> s.rematchOfferedBy)

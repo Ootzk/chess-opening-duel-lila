@@ -226,7 +226,7 @@ function renderActions(ctrl: SeriesPickCtrl): VNode {
 
     if (ctrl.isSelecting) {
       if (ctrl.isMyTurnToSelect) {
-        // I'm the winner selecting — show opponent (loser) status
+        // I'm the loser selecting — show opponent (winner) status
         statusClass = 'waiting';
         statusText = ' is watching...';
       } else {

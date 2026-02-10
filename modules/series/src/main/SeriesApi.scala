@@ -366,7 +366,7 @@ final class SeriesApi(
     else
       startRandomGame(s, pool, Some(oldGameId)).void
 
-  // ===== Selecting Phase: 승자가 오프닝 선택 =====
+  // ===== Selecting Phase: 패자가 오프닝 선택 =====
 
   /** 실시간 선택 동기화 — DB에 저장하지 않고 WS로만 브로드캐스트 */
   def setSelectingPick(seriesId: SeriesId, userId: UserId, presetName: Option[String]): Fu[Option[Series]] =
@@ -377,7 +377,7 @@ final class SeriesApi(
           case None => fuccess(None)
           case Some(idx) =>
             if s.phase != Series.Phase.Selecting then fuccess(None)
-            else if s.lastGameWinner != Some(idx) then fuccess(None)
+            else if s.lastGameLoser != Some(idx) then fuccess(None)
             else
               socket.foreach(_.notifySelectingPick(seriesId, presetName))
               fuccess(Some(s))
@@ -391,7 +391,7 @@ final class SeriesApi(
           case None => fuccess(None)
           case Some(idx) =>
             if s.phase != Series.Phase.Selecting then fuccess(None)
-            else if s.lastGameWinner != Some(idx) then fuccess(None)
+            else if s.lastGameLoser != Some(idx) then fuccess(None)
             else if s.player(idx).confirmedSelecting then fuccess(Some(s))
             else
               val remaining = s.remainingPicks(idx)
@@ -426,15 +426,15 @@ final class SeriesApi(
   private def startSelectingDelayed(seriesId: SeriesId): Unit =
     repo.byId(seriesId).foreach:
       case Some(s) if s.phase == Series.Phase.Selecting =>
-        s.lastGameWinner match
-          case Some(winnerIdx) if s.player(winnerIdx).confirmedSelecting =>
-            s.player(winnerIdx).selectingPick match
+        s.lastGameLoser match
+          case Some(loserIdx) if s.player(loserIdx).confirmedSelecting =>
+            s.player(loserIdx).selectingPick match
               case Some(pickName) =>
-                val remaining = s.remainingPicks(winnerIdx)
+                val remaining = s.remainingPicks(loserIdx)
                 remaining.find(_.name == pickName).foreach: opening =>
                   val round = s.currentRound
-                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.WinnerChoice)
-                  val clearSelecting = withOpening.updatePlayer(winnerIdx, _.clearSelecting)
+                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
+                  val clearSelecting = withOpening.updatePlayer(loserIdx, _.clearSelecting)
 
                   for
                     game <- createGame(clearSelecting, round, opening)
@@ -463,14 +463,14 @@ final class SeriesApi(
           case None => fuccess(None)
           case Some(idx) =>
             if s.phase != Series.Phase.Selecting then fuccess(None)
-            else if s.lastGameWinner != Some(idx) then fuccess(None)
+            else if s.lastGameLoser != Some(idx) then fuccess(None)
             else
               val remaining = s.remainingPicks(idx)
               remaining.find(_.name == preset.name) match
                 case None => fuccess(None)
                 case Some(opening) =>
                   val round = s.currentRound
-                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.WinnerChoice)
+                  val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
                   val clearSelecting = withOpening.updatePlayer(idx, _.clearSelecting)
 
                   for
@@ -610,11 +610,11 @@ final class SeriesApi(
       Some(forfeited)
 
   private def serverTimeoutSelecting(s: Series): Fu[Option[Series]] =
-    s.lastGameWinner match
+    s.lastGameLoser match
       case None => fuccess(Some(s))
-      case Some(winnerIdx) =>
+      case Some(loserIdx) =>
         // 이미 confirmedSelecting이면 3초 스케줄이 처리 중
-        if s.player(winnerIdx).confirmedSelecting then fuccess(Some(s))
+        if s.player(loserIdx).confirmedSelecting then fuccess(Some(s))
         else
           val p0dc = s.player(0).isDisconnected
           val p1dc = s.player(1).isDisconnected
@@ -633,10 +633,10 @@ final class SeriesApi(
       case Some(s) =>
         if s.phase != Series.Phase.Selecting then fuccess(None)
         else
-          s.lastGameWinner match
+          s.lastGameLoser match
             case None => fuccess(None)
-            case Some(winnerIdx) =>
-              val remaining = s.remainingPicks(winnerIdx)
+            case Some(loserIdx) =>
+              val remaining = s.remainingPicks(loserIdx)
               if remaining.isEmpty then
                 val allRemaining = s.unusedRemainingPicks
                 if allRemaining.isEmpty then fuccess(None)
