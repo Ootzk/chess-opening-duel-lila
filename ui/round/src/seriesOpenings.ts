@@ -9,7 +9,7 @@ export interface SeriesOpeningsCtrl extends ChatPlugin {
 }
 
 export const seriesOpeningsCtrl = (series: Series, player: Player, opponent: Player): SeriesOpeningsCtrl => {
-  let activeSubTab = 0; // 0=me, 1=opponent, 2=neutral
+  let activeSubTab = 0; // 0=me, 1=opponent
 
   const povIndex = series.povIndex ?? 0;
   const oppIndex = 1 - povIndex;
@@ -22,17 +22,12 @@ export const seriesOpeningsCtrl = (series: Series, player: Player, opponent: Pla
     return picks.filter(p => !oppBanNames.has(p.name) && !p.usedInRound);
   };
 
-  const neutralPool = (): SeriesOpeningInfo[] =>
-    series.openings.filter(o => (o.source === 'ban' || o.source === 'neutral') && !o.usedInRound);
-
   const openingsForTab = (tab: number): SeriesOpeningInfo[] => {
     if (tab === 0) return remainingPicks(povIndex);
-    if (tab === 1) return remainingPicks(oppIndex);
-    return neutralPool();
+    return remainingPicks(oppIndex);
   };
 
   const tabLabel = (tab: number): VNode[] => {
-    if (tab === 2) return [h('span', 'Neutral')];
     const user = tab === 0 ? player.user : opponent.user;
     if (!user) return [h('span', tab === 0 ? 'Player 1' : 'Player 2')];
     const nodes: VNode[] = [];
@@ -48,7 +43,7 @@ export const seriesOpeningsCtrl = (series: Series, player: Player, opponent: Pla
         'a.series-openings__board.mini-board.mini-board--init.cg-wrap.is2d',
         {
           attrs: {
-            'data-state': `${opening.fen},white,`,
+            'data-state': `${opening.fen},${opening.ownerColor || 'white'},`,
             ...(opening.url ? { href: opening.url, target: '_blank' } : {}),
           },
         },
@@ -80,7 +75,7 @@ export const seriesOpeningsCtrl = (series: Series, player: Player, opponent: Pla
       }, [
         h(
           'div.series-openings__tabs',
-          [0, 1, 2].map(i =>
+          [0, 1].map(i =>
             h(
               'div.series-openings__tab',
               {

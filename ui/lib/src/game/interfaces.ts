@@ -37,7 +37,8 @@ export interface SeriesOpeningInfo {
   name: string;
   fen: string;
   url?: string;
-  source: 'pick' | 'ban' | 'neutral';
+  ownerColor: Color;
+  source: 'pick' | 'ban';
   owner: number;
   usedInRound?: number;
   selectedBy?: string;
