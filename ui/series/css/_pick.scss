@@ -410,6 +410,10 @@
     &.defeat {
       color: $c-bad;
     }
+
+    &.draw {
+      color: $c-brag;
+    }
   }
 
   &__players {

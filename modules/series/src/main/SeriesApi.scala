@@ -346,8 +346,24 @@ final class SeriesApi(
             else if result == GameResult.Draw then
               handleDraw(updated, gameId)
             else
-              val selecting = updated.setPhase(Series.Phase.Selecting)
-              repo.update(selecting).map(_ => Bus.pub(SeriesEnterSelecting(selecting, gameId)))
+              val loserIdx = 1 - winnerIndex.get
+              val loserRemaining = updated.remainingPicks(loserIdx)
+              if loserRemaining.isEmpty then
+                val allRemaining = updated.unusedRemainingPicks
+                if allRemaining.isEmpty then
+                  // 양측 모두 소진 → 시리즈 종료 (무승부 가능)
+                  val finished = updated.copy(
+                    phase = Series.Phase.Finished,
+                    status = Series.Status.Finished,
+                    finishedAt = Some(nowInstant)
+                  )
+                  repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
+                else
+                  // 패자 pick 소진 → 상대 pick에서 랜덤 선택
+                  startRandomGame(updated, allRemaining, Some(gameId)).void
+              else
+                val selecting = updated.setPhase(Series.Phase.Selecting)
+                repo.update(selecting).map(_ => Bus.pub(SeriesEnterSelecting(selecting, gameId)))
 
   // ===== 무승부 처리 =====
 

@@ -279,10 +279,13 @@ function renderFinishedHeader(ctrl: SeriesPickCtrl): VNode {
   const iWon = winnerIdx === povIndex;
 
   const isForfeit = ctrl.series.forfeitBy !== undefined;
-  const bannerClass = iWon ? 'victory' : 'defeat';
-  const bannerText = iWon
-    ? isForfeit ? 'Victory! (forfeit)' : 'Victory!'
-    : isForfeit ? 'Defeat (forfeit)' : 'Defeat';
+  const isDraw = winnerIdx == null;
+  const bannerClass = isDraw ? 'draw' : iWon ? 'victory' : 'defeat';
+  const bannerText = isDraw
+    ? 'Draw'
+    : iWon
+      ? isForfeit ? 'Victory! (forfeit)' : 'Victory!'
+      : isForfeit ? 'Defeat (forfeit)' : 'Defeat';
 
   return h('div.series-finished__header', [
     h(`div.series-finished__result-banner.${bannerClass}`, bannerText),
