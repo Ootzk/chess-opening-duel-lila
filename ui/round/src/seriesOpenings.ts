@@ -38,7 +38,7 @@ export const seriesOpeningsCtrl = (series: Series, player: Player, opponent: Pla
   };
 
   const renderCard = (opening: SeriesOpeningInfo): VNode =>
-    h('div.series-openings__card', [
+    h(`div.series-openings__card.owner-${opening.ownerColor || 'white'}`, [
       h(
         'a.series-openings__board.mini-board.mini-board--init.cg-wrap.is2d',
         {

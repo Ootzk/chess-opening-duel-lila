@@ -53,6 +53,22 @@
     @extend %flex-column;
     @extend %box-radius;
     background: $c-bg-zebra;
+
+    &.owner-white {
+      background: hsl(60, 10%, 90%);
+
+      .series-openings__name {
+        color: hsl(0, 0%, 25%);
+      }
+    }
+
+    &.owner-black {
+      background: hsl(0, 0%, 22%);
+
+      .series-openings__name {
+        color: hsl(0, 0%, 85%);
+      }
+    }
   }
 
   &__board {
