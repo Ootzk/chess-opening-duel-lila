@@ -73,11 +73,11 @@ final class SeriesApi(
           case Some(idx) =>
             if s.phase != Series.Phase.Picking then fuccess(None)
             else
-              val withoutOldPicks = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
               val newPicks = presets.take(Series.maxPicks).map: preset =>
                 SeriesOpening.makePick(preset, idx)
-              val updated = withoutOldPicks.addOpenings(newPicks)
-              repo.update(updated).inject(Some(updated))
+              // Atomic: $pull old picks + $push new picks to avoid lost-update race
+              repo.replacePlayerOpenings(seriesId, idx, OpeningSource.Pick, newPicks).flatMap: _ =>
+                repo.byId(seriesId).dmap(_.orElse(Some(s)))
 
   // ===== 밴 설정 =====
 
@@ -92,12 +92,11 @@ final class SeriesApi(
             else
               val opponentPicks = s.picks(1 - idx).map(_.name).toSet
               val validPresets = presets.filter(p => opponentPicks.contains(p.name))
-
-              val withoutOldBans = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Ban)
               val newBans = validPresets.take(Series.maxBans).map: preset =>
                 SeriesOpening.makeBan(preset, idx)
-              val updated = withoutOldBans.addOpenings(newBans)
-              repo.update(updated).inject(Some(updated))
+              // Atomic: $pull old bans + $push new bans to avoid lost-update race
+              repo.replacePlayerOpenings(seriesId, idx, OpeningSource.Ban, newBans).flatMap: _ =>
+                repo.byId(seriesId).dmap(_.orElse(Some(s)))
 
   // ===== 픽 확정 =====
 
@@ -161,22 +160,22 @@ final class SeriesApi(
               val needed = Series.maxPicks - currentPicks.size
               val randomFills = scala.util.Random.shuffle(remaining).take(needed)
               val finalPicks = currentPicks ++ randomFills
-
-              // 기존 픽 제거 후 새 픽 추가
-              val withoutOldPicks = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
               val newPicks = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
-              val withPicks = withoutOldPicks.addOpenings(newPicks)
 
-              // 확정 처리
-              val confirmed = withPicks.updatePlayer(idx, _.confirmPicks)
-              val updated =
-                if confirmed.bothPicksConfirmed then confirmed.setPhase(Series.Phase.Banning)
-                else confirmed
-              repo.update(updated).map: _ =>
-                socketNotifyConfirmed(seriesId, idx, "picks")
-                if updated.phase == Series.Phase.Banning then
-                  Bus.pub(SeriesPhaseChanged(updated))
-                Some(updated)
+              // Atomic: replace openings + set confirm flag
+              repo.replacePlayerOpenings(seriesId, idx, OpeningSource.Pick, newPicks).flatMap: _ =>
+                repo.setConfirmedPicks(seriesId, idx, true).flatMap: _ =>
+                  socketNotifyConfirmed(seriesId, idx, "picks")
+                  repo.byId(seriesId).flatMap:
+                    case Some(updated) =>
+                      if updated.bothPicksConfirmed then
+                        repo.setPhaseIfCurrent(seriesId, Series.Phase.Picking, Series.Phase.Banning).map: applied =>
+                          if applied then
+                            val phaseChanged = updated.setPhase(Series.Phase.Banning)
+                            Bus.pub(SeriesPhaseChanged(phaseChanged))
+                          Some(updated)
+                      else fuccess(Some(updated))
+                    case None => fuccess(None)
 
   // ===== 밴 확정 =====
 
@@ -265,20 +264,18 @@ final class SeriesApi(
               val needed = Series.maxBans - currentBans.size
               val randomFills = scala.util.Random.shuffle(remaining.toList).take(needed).map(_.toPreset)
               val finalBans = currentBans ++ randomFills
-
-              // 기존 밴 제거 후 새 밴 추가
-              val withoutOldBans = s.removeOpeningsByOwnerAndSource(idx, OpeningSource.Ban)
               val newBans = finalBans.map(preset => SeriesOpening.makeBan(preset, idx))
-              val withBans = withoutOldBans.addOpenings(newBans)
 
-              // 확정 처리
-              val confirmed = withBans.updatePlayer(idx, _.confirmBans)
-              if confirmed.bothBansConfirmed then
-                startGame1(confirmed)
-              else
-                repo.update(confirmed).map: _ =>
+              // Atomic: replace openings + set confirm flag
+              repo.replacePlayerOpenings(seriesId, idx, OpeningSource.Ban, newBans).flatMap: _ =>
+                repo.setConfirmedBans(seriesId, idx, true).flatMap: _ =>
                   socketNotifyConfirmed(seriesId, idx, "bans")
-                  Some(confirmed)
+                  repo.byId(seriesId).map:
+                    case Some(updated) =>
+                      if updated.bothBansConfirmed then
+                        startGame1Delayed(seriesId) // Uses setPhaseIfCurrent guard
+                      Some(updated)
+                    case None => None
 
   // ===== 랜덤 오프닝 게임 시작 (공통) =====
 

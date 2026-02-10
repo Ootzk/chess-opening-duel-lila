@@ -54,6 +54,22 @@ final class SeriesRepo(val coll: Coll)(using Executor):
       )
       .dmap(_.nModified > 0)
 
+  /** Atomically replace openings for a specific player and source.
+    * Uses $pull + $push to avoid lost-update race condition
+    * when both players set picks/bans concurrently.
+    */
+  def replacePlayerOpenings(id: SeriesId, playerIndex: Int, source: OpeningSource, newOpenings: List[SeriesOpening]): Funit =
+    coll.update.one(
+      $id(id),
+      $pull("op" -> $doc("o" -> playerIndex, "s" -> source))
+    ).flatMap: _ =>
+      if newOpenings.nonEmpty then
+        coll.update.one(
+          $id(id),
+          $push("op" -> $doc("$each" -> newOpenings))
+        ).void
+      else funit
+
   // 두 플레이어로 가장 최근 생성된 series 찾기 (밴픽 리다이렉트용)
   def byPlayers(user1: UserId, user2: UserId): Fu[Option[Series]] =
     coll
