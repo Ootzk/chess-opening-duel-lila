@@ -236,11 +236,36 @@
   }
 }
 
-// Pick pool grid for RandomSelecting phase
-.series-pick__pick-pool {
+// Pick boxes for RandomSelecting phase (two player boxes side by side)
+.series-pick__pick-boxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc($block-gap * 2);
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.series-pick__pick-box {
+  background: $c-bg-box;
+  @extend %box-radius;
+  padding: $block-gap;
+}
+
+.series-pick__pick-header {
+  @extend %flex-center;
+  padding-bottom: $block-gap;
+  border-bottom: 1px solid $c-border;
+  margin-bottom: $block-gap;
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.series-pick__pick-openings {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: $block-gap;
+  gap: calc($block-gap / 2);
 
   @media (max-width: 600px) {
     grid-template-columns: repeat(2, 1fr);

@@ -2,7 +2,6 @@ import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type SeriesPickCtrl from './ctrl';
 import type { OpeningPreset, SeriesOpening, SeriesGame, SeriesPlayer } from './interfaces';
-import { getUnusedRemainingPicks } from './interfaces';
 import { userLink } from 'lib/view/userLink';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
@@ -21,26 +20,60 @@ export default function view(ctrl: SeriesPickCtrl): VNode {
 }
 
 function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
-  const pool = getUnusedRemainingPicks(ctrl.series);
+  const povIndex = ctrl.series.povIndex ?? 0;
+  const oppIndex = 1 - povIndex;
+  const myPlayer = ctrl.series.players[povIndex];
+  const oppPlayer = ctrl.series.players[oppIndex];
   const gameNum = ctrl.series.round;
 
   // Find which opening was selected for the current round's game
   const currentRoundGame = ctrl.series.games.find(g => g.round === gameNum);
+  const highlightedId = currentRoundGame?.openingId;
+
+  // Include the current round's opening (getRemainingPicks excludes it via usedInRound filter)
+  const picksForDisplay = (playerIndex: number): SeriesOpening[] => {
+    const picks = ctrl.series.openings.filter(o => o.owner === playerIndex && o.source === 'pick');
+    const oppBanNames = new Set(
+      ctrl.series.openings.filter(o => o.owner === (1 - playerIndex) && o.source === 'ban').map(o => o.name),
+    );
+    return picks.filter(p => !oppBanNames.has(p.name) && (!p.usedInRound || p.usedInRound === gameNum));
+  };
+  const myPicks = picksForDisplay(povIndex);
+  const oppPicks = picksForDisplay(oppIndex);
 
   return h('div.series-pick.random-selecting', [
     h('div.series-pick__header', [
       h('h1', `Game ${gameNum} Starting...`),
       h('div.series-pick__countdown', String(ctrl.randomSelectingCountdown)),
     ]),
+    h('div.series-pick__pick-boxes', [
+      renderPickBox(myPicks, myPlayer, true, highlightedId),
+      renderPickBox(oppPicks, oppPlayer, false, highlightedId),
+    ]),
+  ]);
+}
+
+function renderPickBox(
+  picks: SeriesOpening[],
+  player: SeriesPlayer,
+  isMe: boolean,
+  highlightedId?: string,
+): VNode {
+  const user = player.user;
+  return h('div.series-pick__pick-box', [
+    h('div.series-pick__pick-header', [
+      user
+        ? userLink({ name: user.name, title: user.title, flair: user.flair, online: true, line: false })
+        : h('span', isMe ? 'My Picks' : 'Opponent Picks'),
+    ]),
     h(
-      'div.series-pick__pick-pool',
-      pool.map(opening => renderRandomSelectingOpening(ctrl, opening, currentRoundGame?.openingId)),
+      'div.series-pick__pick-openings',
+      picks.map(opening => renderRandomSelectingOpening(opening, highlightedId)),
     ),
   ]);
 }
 
 function renderRandomSelectingOpening(
-  ctrl: SeriesPickCtrl,
   opening: SeriesOpening,
   highlightedId?: string,
 ): VNode {
