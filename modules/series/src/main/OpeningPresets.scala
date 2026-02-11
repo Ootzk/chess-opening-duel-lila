@@ -31,7 +31,7 @@ object OpeningPresets:
     // 1.d4 d5 2.c4 e6 3.Nc3 Nf6
     OpeningPreset(
       "Queen's Gambit Declined: Normal Defense",
-      Fen.Full("rnbqkb1r/ppp1pppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4"),
+      Fen.Full("rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4"),
       nameToUrl("Queen's Gambit Declined: Normal Defense"),
       chess.Color.White
     ),
