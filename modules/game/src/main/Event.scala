@@ -245,6 +245,31 @@ object Event:
     override def only = Some(color)
     override def owner = true
 
+  // Series: Resting phase 진입 (게임 종료 후 다음 게임 전 대기)
+  // only 플래그로 색상별 타겟팅 (owner=true 사용 금지: tellVersion에서 'p' 플래그가 only를 덮어씀)
+  case class SeriesResting(color: Color, timeLeft: Int) extends Event:
+    def typ = "seriesResting"
+    def data = Json.obj("timeLeft" -> timeLeft)
+    override def only = Some(color)
+
+  // Series: 상대가 Next Game 클릭
+  case class SeriesNextReady(color: Color) extends Event:
+    def typ = "seriesNextReady"
+    def data = JsNull
+    override def only = Some(color)
+
+  // Series: 상대가 Next Game 취소
+  case class SeriesCancelNextReady(color: Color) extends Event:
+    def typ = "seriesCancelNextReady"
+    def data = JsNull
+    override def only = Some(color)
+
+  // Series: 양측 모두 Next Game 확인 → 카운트다운 시작
+  case class SeriesBothNextReady(color: Color, countdown: Int) extends Event:
+    def typ = "seriesBothNextReady"
+    def data = Json.obj("countdown" -> countdown)
+    override def only = Some(color)
+
   case class Promotion(role: PromotableRole, pos: Square) extends Event:
     def typ = "promotion"
     def data =
