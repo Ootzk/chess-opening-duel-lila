@@ -156,6 +156,24 @@ export function make(send: RoundSocketSend, ctrl: RoundController): RoundSocket 
           `<a class="button" href="/simul/${simul.id}">Back to ${simul.name} simul</a></div>`,
       });
     },
+    seriesResting(o: { timeLeft: number }) {
+      ctrl.initSeriesResting(o.timeLeft);
+    },
+    seriesNextReady() {
+      ctrl.seriesOpponentNextReady = true;
+      ctrl.redraw();
+    },
+    seriesCancelNextReady() {
+      ctrl.seriesOpponentNextReady = false;
+      ctrl.seriesBothNextReady = false;
+      clearInterval(ctrl['seriesCountdownInterval']);
+      ctrl.redraw();
+    },
+    seriesBothNextReady(o: { countdown: number }) {
+      ctrl.seriesBothNextReady = true;
+      ctrl.startSeriesCountdown();
+      ctrl.redraw();
+    },
   };
 
   pubsub.on('ab.rep', n => send('rep', { n }));

@@ -34,3 +34,7 @@ case class NotifySeriesSelecting(seriesId: lila.core.id.SeriesId, oldGameId: Gam
 case class NotifySeriesRandomSelecting(seriesId: lila.core.id.SeriesId, oldGameId: GameId)
 case class NotifySeriesFinished(seriesId: lila.core.id.SeriesId, oldGameId: GameId)
 case class NotifySeriesForfeited(gameId: GameId, loserColor: chess.Color)
+case class NotifySeriesResting(seriesId: lila.core.id.SeriesId, oldGameId: GameId, timeLeft: Int)
+case class NotifySeriesNextReady(gameId: GameId, readyColor: chess.Color)
+case class NotifySeriesCancelNextReady(gameId: GameId, cancelColor: chess.Color)
+case class NotifySeriesBothNextReady(gameId: GameId, countdown: Int)

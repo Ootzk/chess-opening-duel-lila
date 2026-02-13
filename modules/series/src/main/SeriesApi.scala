@@ -343,27 +343,111 @@ final class SeriesApi(
                 finishedAt = Some(nowInstant)
               )
               repo.update(forfeited).map(_ => Bus.pub(SeriesFinished(forfeited)))
-            else if result == GameResult.Draw then
-              handleDraw(updated, gameId)
             else
-              val loserIdx = 1 - winnerIndex.get
-              val loserRemaining = updated.remainingPicks(loserIdx)
+              // 시리즈 미종료 + 정상 게임 종료 → Resting phase 진입
+              val resting = updated.updatePlayers(_.clearNext).setPhase(Series.Phase.Resting)
+              repo.update(resting).map: _ =>
+                Bus.pub(SeriesPhaseChanged(resting))
+                Bus.pub(SeriesEnterResting(resting, gameId))
+
+  // ===== Resting Phase: Next Game 확인 =====
+
+  def confirmNextGame(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Resting then fuccess(None)
+            else if s.player(idx).confirmedNext then fuccess(Some(s))
+            else
+              repo.setConfirmedNext(seriesId, idx, true).flatMap: _ =>
+                // Notify opponent via round socket
+                s.currentGameId.orElse(s.lastFinishedGame.map(_.gameId)).foreach: gameId =>
+                  val color = gameColor(s, idx)
+                  Bus.pub(lila.game.actorApi.NotifySeriesNextReady(gameId, color))
+                repo.byId(seriesId).map:
+                  case Some(updated) =>
+                    if updated.bothNextConfirmed then
+                      val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                        confirmDelaySchedules.remove(seriesId)
+                        transitionFromResting(seriesId)
+                      confirmDelaySchedules.put(seriesId, cancellable)
+                      // Notify both players via round socket
+                      updated.lastFinishedGame.map(_.gameId).foreach: gameId =>
+                        Bus.pub(lila.game.actorApi.NotifySeriesBothNextReady(gameId, Series.bothConfirmedDelay))
+                    Some(updated)
+                  case None => None
+
+  def cancelConfirmNextGame(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case None => fuccess(None)
+      case Some(s) =>
+        s.playerIndex(userId) match
+          case None => fuccess(None)
+          case Some(idx) =>
+            if s.phase != Series.Phase.Resting then fuccess(None)
+            else if !s.player(idx).confirmedNext then fuccess(Some(s))
+            else
+              repo.setConfirmedNext(seriesId, idx, false).flatMap: _ =>
+                confirmDelaySchedules.remove(seriesId).foreach(_.cancel())
+                // Notify opponent via round socket
+                s.lastFinishedGame.map(_.gameId).foreach: gameId =>
+                  val color = gameColor(s, idx)
+                  Bus.pub(lila.game.actorApi.NotifySeriesCancelNextReady(gameId, color))
+                repo.byId(seriesId).map(_.orElse(Some(s)))
+
+  /** Resting에서 나갈 때 실제 다음 Phase를 결정 */
+  private def transitionFromResting(seriesId: SeriesId): Unit =
+    repo.byId(seriesId).foreach:
+      case Some(s) if s.phase == Series.Phase.Resting =>
+        val lastGame = s.games.maxByOption(_.round)
+        lastGame.foreach: game =>
+          val oldGameId = game.gameId
+          val winnerIndex = game.result.flatMap:
+            case GameResult.WhiteWins => Some(game.whitePlayerIndex)
+            case GameResult.BlackWins => Some(1 - game.whitePlayerIndex)
+            case GameResult.Draw      => None
+
+          winnerIndex match
+            case None =>
+              // Draw → handleDraw (RandomSelecting or Finished)
+              handleDraw(s, oldGameId)
+            case Some(winIdx) =>
+              val loserIdx = 1 - winIdx
+              val loserRemaining = s.remainingPicks(loserIdx)
               if loserRemaining.isEmpty then
-                val allRemaining = updated.unusedRemainingPicks
+                val allRemaining = s.unusedRemainingPicks
                 if allRemaining.isEmpty then
-                  // 양측 모두 소진 → 시리즈 종료 (무승부 가능)
-                  val finished = updated.copy(
+                  // 양측 모두 소진 → 시리즈 종료
+                  val finished = s.copy(
                     phase = Series.Phase.Finished,
                     status = Series.Status.Finished,
                     finishedAt = Some(nowInstant)
                   )
-                  repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
+                  repo.update(finished).foreach(_ => Bus.pub(SeriesFinished(finished)))
                 else
                   // 패자 pick 소진 → 상대 pick에서 랜덤 선택
-                  startRandomGame(updated, allRemaining, Some(gameId)).void
+                  startRandomGame(s, allRemaining, Some(oldGameId))
               else
-                val selecting = updated.setPhase(Series.Phase.Selecting)
-                repo.update(selecting).map(_ => Bus.pub(SeriesEnterSelecting(selecting, gameId)))
+                val selecting = s.setPhase(Series.Phase.Selecting)
+                repo.update(selecting).foreach(_ => Bus.pub(SeriesEnterSelecting(selecting, oldGameId)))
+      case _ => ()
+
+  def serverTimeoutResting(s: Series): Fu[Option[Series]] =
+    if s.bothNextConfirmed then fuccess(Some(s)) // 3초 스케줄이 처리 중
+    else
+      transitionFromResting(s.id)
+      fuccess(Some(s))
+
+  /** Helper: get chess.Color for a player index based on the last game */
+  private def gameColor(s: Series, playerIndex: Int): chess.Color =
+    s.lastFinishedGame match
+      case Some(game) =>
+        if game.whitePlayerIndex == playerIndex then chess.Color.White
+        else chess.Color.Black
+      case None => chess.Color.White
 
   // ===== 무승부 처리 =====
 
@@ -511,6 +595,7 @@ final class SeriesApi(
           case Series.Phase.Picking   => serverTimeoutPicking(s)
           case Series.Phase.Banning   => serverTimeoutBanning(s)
           case Series.Phase.Selecting => serverTimeoutSelecting(s)
+          case Series.Phase.Resting   => serverTimeoutResting(s)
           case _                      => fuccess(Some(s))
 
   private def serverTimeoutPicking(s: Series): Fu[Option[Series]] =
@@ -808,4 +893,5 @@ case class SeriesFinished(s: Series)
 case class SeriesGameFinished(s: Series, gameId: GameId, winnerId: Option[UserId])
 case class SeriesEnterSelecting(s: Series, oldGameId: GameId)
 case class SeriesDrawRandomSelecting(s: Series, oldGameId: GameId)
+case class SeriesEnterResting(s: Series, oldGameId: GameId)
 case class SeriesPhaseChanged(s: Series)

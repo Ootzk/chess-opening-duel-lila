@@ -489,6 +489,8 @@ POST  /series/$id<\w{8}>/selectRandom         controllers.Series.selectRandomOpe
 POST  /series/$id<\w{8}>/setSelectingPick     controllers.Series.setSelectingPick(id: SeriesId)
 POST  /series/$id<\w{8}>/confirmSelecting     controllers.Series.confirmSelecting(id: SeriesId)
 POST  /series/$id<\w{8}>/cancelConfirmSelecting controllers.Series.cancelConfirmSelecting(id: SeriesId)
+POST  /series/$id<\w{8}>/confirmNext           controllers.Series.confirmNextGame(id: SeriesId)
+POST  /series/$id<\w{8}>/cancelConfirmNext   controllers.Series.cancelConfirmNextGame(id: SeriesId)
 POST  /series/$id<\w{8}>/forfeit              controllers.Series.forfeit(id: SeriesId)
 POST  /series/$id<\w{8}>/rematch             controllers.Series.rematch(id: SeriesId)
 

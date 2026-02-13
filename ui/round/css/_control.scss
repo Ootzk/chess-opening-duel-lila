@@ -155,6 +155,48 @@
     @include mq-is-col1 {
       margin-top: $block-gap;
     }
+
+    &.series-rest {
+      align-items: center;
+      gap: 0.5em;
+      padding: 0.8em 0;
+    }
+  }
+
+  .series-rest {
+    &__timer {
+      font-size: 1.1em;
+      font-weight: bold;
+
+      &.hurry {
+        color: $c-error;
+      }
+    }
+
+    &__actions {
+      display: flex;
+      align-items: center;
+      gap: 1em;
+      width: 100%;
+      justify-content: center;
+    }
+
+    &__confirm,
+    &__cancel {
+      width: auto;
+      padding: 0.5em 1.2em;
+    }
+
+    &__opponent-status {
+      font-size: 0.9em;
+      opacity: 0.7;
+
+      &.ready {
+        opacity: 1;
+        color: $c-good;
+        font-weight: bold;
+      }
+    }
   }
 
   .analysis,

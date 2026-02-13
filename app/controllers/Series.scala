@@ -324,6 +324,20 @@ final class Series(env: Env) extends LilaController(env):
           case None => JsonBadRequest(jsonError("Cannot cancel confirm"))
   }
 
+  // Resting phase: Next Game 확인
+  def confirmNextGame(id: SeriesId) = Auth { ctx ?=> me ?=>
+    api.confirmNextGame(id, me.userId).map:
+      case Some(_) => jsonOkResult
+      case None    => NotFound
+  }
+
+  // Resting phase: Next Game 확인 취소
+  def cancelConfirmNextGame(id: SeriesId) = Auth { ctx ?=> me ?=>
+    api.cancelConfirmNextGame(id, me.userId).map:
+      case Some(_) => jsonOkResult
+      case None    => NotFound
+  }
+
   // 시리즈 포기 (전체 시리즈를 presser 패배로 종료)
   def forfeit(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>

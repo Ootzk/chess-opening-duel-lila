@@ -205,6 +205,18 @@ final class RoundSocket(
   Bus.sub[lila.game.actorApi.NotifySeriesForfeited]: forfeited =>
     rounds.tellIfPresent(forfeited.gameId, forfeited)
 
+  Bus.sub[lila.game.actorApi.NotifySeriesResting]: resting =>
+    rounds.tellIfPresent(resting.oldGameId, resting)
+
+  Bus.sub[lila.game.actorApi.NotifySeriesNextReady]: ready =>
+    rounds.tellIfPresent(ready.gameId, ready)
+
+  Bus.sub[lila.game.actorApi.NotifySeriesCancelNextReady]: cancel =>
+    rounds.tellIfPresent(cancel.gameId, cancel)
+
+  Bus.sub[lila.game.actorApi.NotifySeriesBothNextReady]: both =>
+    rounds.tellIfPresent(both.gameId, both)
+
   Bus.sub[FishnetStart.type](rounds.tellAll(_))
   Bus.sub[TellMany]:
     case TellMany(gameIds, msg) => rounds.tellIds(gameIds, msg)

@@ -253,9 +253,43 @@ export function moretime(ctrl: RoundController): LooseVNode {
   );
 }
 
+export function seriesRestFollowUp(ctrl: RoundController): VNode {
+  const hurry = ctrl.seriesRestTimeLeft <= 10;
+  const timerText = ctrl.seriesBothNextReady
+    ? `Game starting in ${ctrl.seriesNextCountdown}...`
+    : `Next game starts in ${ctrl.seriesRestTimeLeft}`;
+  return hl('div.follow-up.series-rest', [
+    hl('div.series-rest__timer', { class: { hurry: hurry && !ctrl.seriesBothNextReady } }, timerText),
+    hl('div.series-rest__actions', [
+      ctrl.seriesMyNextReady
+        ? hl(
+            'button.button.button-metal.series-rest__cancel',
+            { hook: bind('click', () => ctrl.cancelConfirmNextGame()) },
+            'Cancel',
+          )
+        : hl(
+            'button.button.button-green.series-rest__confirm',
+            { hook: bind('click', () => ctrl.confirmNextGame()) },
+            'Confirm',
+          ),
+      hl(
+        'div.series-rest__opponent-status',
+        { class: { ready: ctrl.seriesOpponentNextReady } },
+        ctrl.seriesOpponentNextReady ? 'Opponent is Ready!' : 'Waiting for opponent...',
+      ),
+    ]),
+  ]);
+}
+
 export function followUp(ctrl: RoundController): VNode {
-  const d = ctrl.data,
-    rematchable =
+  const d = ctrl.data;
+
+  // Series resting: show rest UI instead of rematch/analysis
+  if (d.series && !d.series.finished && ctrl.seriesResting) {
+    return seriesRestFollowUp(ctrl);
+  }
+
+  const rematchable_ =
       !d.game.rematch &&
       (finished(d) || (aborted(d) && (!d.game.rated || !['lobby', 'pool'].includes(d.game.source)))) &&
       !d.tournament &&
@@ -264,7 +298,7 @@ export function followUp(ctrl: RoundController): VNode {
       !d.series &&
       !d.game.boosted,
     newable = (finished(d) || aborted(d)) && ['lobby', 'pool', 'local'].includes(d.game.source),
-    rematchZone = rematchable || d.game.rematch ? rematchButtons(ctrl) : [];
+    rematchZone = rematchable_ || d.game.rematch ? rematchButtons(ctrl) : [];
   return hl('div.follow-up', [
     rematchZone,
     d.tournament &&

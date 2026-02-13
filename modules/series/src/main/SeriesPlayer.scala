@@ -11,6 +11,7 @@ case class SeriesPlayer(
     confirmedBans: Boolean = false,
     confirmedSelecting: Boolean = false,
     selectingPick: Option[String] = None, // 선택한 오프닝 이름
+    confirmedNext: Boolean = false,
     lastSeenAt: Option[Instant] = None
 ):
   def addWin: SeriesPlayer                 = copy(score = score + 2)
@@ -23,6 +24,9 @@ case class SeriesPlayer(
   def confirmSelecting(pick: String): SeriesPlayer = copy(confirmedSelecting = true, selectingPick = Some(pick))
   def cancelConfirmSelecting: SeriesPlayer = copy(confirmedSelecting = false)
   def clearSelecting: SeriesPlayer         = copy(confirmedSelecting = false, selectingPick = None)
+  def confirmNext: SeriesPlayer            = copy(confirmedNext = true)
+  def cancelConfirmNext: SeriesPlayer      = copy(confirmedNext = false)
+  def clearNext: SeriesPlayer              = copy(confirmedNext = false)
   def updateLastSeen: SeriesPlayer         = copy(lastSeenAt = Some(nowInstant))
   // None = 아직 접속 여부를 모름 → online으로 가정
   // Some(time) = time이 5초 이내면 online, 아니면 offline

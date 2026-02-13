@@ -213,6 +213,9 @@ case class Series(
   def bothBansConfirmed: Boolean =
     players._1.confirmedBans && players._2.confirmedBans
 
+  def bothNextConfirmed: Boolean =
+    players._1.confirmedNext && players._2.confirmedNext
+
 object Series:
   val bestOf = 5
   val pointsNeeded = 5  // 2.5 * 2 (internal: win=2, draw=1)
@@ -235,6 +238,7 @@ object Series:
     case Picking extends Phase(10)
     case Banning extends Phase(20)
     case RandomSelecting extends Phase(25)
+    case Resting extends Phase(28)
     case Playing extends Phase(30)
     case Selecting extends Phase(40)
     case Finished extends Phase(50)

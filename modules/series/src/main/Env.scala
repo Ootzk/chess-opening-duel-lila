@@ -55,6 +55,8 @@ final class Env(
           timeouts.schedule(s.id) // Reschedule for Banning phase
         case Series.Phase.Selecting =>
           timeouts.schedule(s.id) // Schedule timeout for Selecting phase (DC → forfeit)
+        case Series.Phase.Resting =>
+          timeouts.schedule(s.id) // Schedule timeout for Resting phase (auto-transition)
         case Series.Phase.RandomSelecting | Series.Phase.Playing | Series.Phase.Finished =>
           timeouts.cancel(s.id) // Cancel timeout when game starts
         case _ => ()
@@ -100,6 +102,11 @@ final class Env(
         case Some(newGame) =>
           Bus.pub(lila.game.actorApi.NotifyRematch(oldGameId, newGame))
         case None => ()
+
+  // When entering Resting phase (between games) - notify round socket clients
+  Bus.sub[SeriesEnterResting]:
+    case SeriesEnterResting(s, oldGameId) =>
+      Bus.pub(lila.game.actorApi.NotifySeriesResting(s.id, oldGameId, s.timeLeftInPhase))
 
   // When entering Selecting phase (Game 2+ with winner)
   Bus.sub[SeriesEnterSelecting]:

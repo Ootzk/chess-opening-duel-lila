@@ -37,6 +37,11 @@ final class SeriesRepo(val coll: Coll)(using Executor):
     val field = s"p$playerIndex.cb"
     coll.update.one($id(id), $set(field -> confirmed)).void
 
+  /** Atomically set confirmedNext for a specific player */
+  def setConfirmedNext(id: SeriesId, playerIndex: Int, confirmed: Boolean): Funit =
+    val field = s"p$playerIndex.cn"
+    coll.update.one($id(id), $set(field -> confirmed)).void
+
   /** Atomically set confirmedSelecting and selectingPick for a specific player */
   def setConfirmedSelecting(id: SeriesId, playerIndex: Int, confirmed: Boolean, pick: Option[String] = None): Funit =
     val csField = s"p$playerIndex.cs"

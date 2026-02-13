@@ -316,6 +316,30 @@ final private class RoundAsyncActor(
         publish:
           chess.ByColor(color => Event.SeriesFinishedRedirect(color, seriesId)).toList
 
+    // Series: Resting phase 진입 (게임 종료 후 다음 게임 전 대기)
+    case lila.game.actorApi.NotifySeriesResting(_, _, timeLeft) =>
+      fuccess:
+        publish:
+          chess.ByColor(color => Event.SeriesResting(color, timeLeft)).toList
+
+    // Series: 상대가 Next Game 클릭
+    case lila.game.actorApi.NotifySeriesNextReady(_, readyColor) =>
+      fuccess:
+        publish:
+          List(Event.SeriesNextReady(!readyColor))
+
+    // Series: 상대가 Next Game 취소
+    case lila.game.actorApi.NotifySeriesCancelNextReady(_, cancelColor) =>
+      fuccess:
+        publish:
+          List(Event.SeriesCancelNextReady(!cancelColor))
+
+    // Series: 양측 모두 Next Game 확인 → 카운트다운 시작
+    case lila.game.actorApi.NotifySeriesBothNextReady(_, countdown) =>
+      fuccess:
+        publish:
+          chess.ByColor(color => Event.SeriesBothNextReady(color, countdown)).toList
+
     // Series: forfeit으로 인한 게임 종료 (resign 또는 abort)
     case lila.game.actorApi.NotifySeriesForfeited(_, loserColor) =>
       handle: game =>

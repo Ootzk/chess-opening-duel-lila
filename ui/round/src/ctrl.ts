@@ -80,6 +80,15 @@ export default class RoundController implements MoveRootCtrl {
   drawConfirm?: Timeout = undefined;
   seriesForfeitConfirm?: Timeout = undefined;
   preventDrawOffer?: Timeout = undefined;
+  // Series resting phase state
+  seriesResting = false;
+  seriesRestTimeLeft = 0;
+  seriesMyNextReady = false;
+  seriesOpponentNextReady = false;
+  seriesBothNextReady = false;
+  seriesNextCountdown = 0;
+  private seriesRestInterval?: number;
+  private seriesCountdownInterval?: number;
   // will be replaced by view layer
   autoScroll: () => void = () => {};
   justDropped?: Role;
@@ -127,6 +136,23 @@ export default class RoundController implements MoveRootCtrl {
     this.moveOn = new MoveOn(this, 'move-on');
     if (!d.local) this.transientMove = new TransientMove(this.socket);
     this.server = new Server(() => this.data);
+
+    // Initialize series resting state from page data (for page refresh)
+    if (d.series?.resting) {
+      this.seriesResting = true;
+      this.seriesRestTimeLeft = d.series.resting.timeLeft;
+      this.seriesMyNextReady = d.series.resting.myReady;
+      this.seriesOpponentNextReady = d.series.resting.opponentReady;
+      // Start the countdown timer
+      this.seriesRestInterval = setInterval(() => {
+        if (this.seriesRestTimeLeft > 0) {
+          this.seriesRestTimeLeft--;
+          this.redraw();
+        } else {
+          clearInterval(this.seriesRestInterval);
+        }
+      }, 1000) as unknown as number;
+    }
 
     this.menu = toggle(false, redraw);
     const nvuiPromise = site.blindMode && site.asset.loadEsm<NvuiPlugin>('round.nvui', { init: this });
@@ -753,6 +779,60 @@ export default class RoundController implements MoveRootCtrl {
       method: 'POST',
       headers: { Accept: 'application/json' },
     });
+  };
+
+  // ===== Series Resting Phase =====
+
+  initSeriesResting = (timeLeft: number): void => {
+    this.seriesResting = true;
+    this.seriesRestTimeLeft = timeLeft;
+    clearInterval(this.seriesRestInterval);
+    this.seriesRestInterval = setInterval(() => {
+      if (this.seriesRestTimeLeft > 0) {
+        this.seriesRestTimeLeft--;
+        this.redraw();
+      } else {
+        clearInterval(this.seriesRestInterval);
+      }
+    }, 1000) as unknown as number;
+    this.redraw();
+  };
+
+  confirmNextGame = (): void => {
+    const seriesId = this.data.series?.id;
+    if (!seriesId) return;
+    this.seriesMyNextReady = true;
+    this.redraw();
+    fetch(`/series/${seriesId}/confirmNext`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+  };
+
+  cancelConfirmNextGame = (): void => {
+    const seriesId = this.data.series?.id;
+    if (!seriesId) return;
+    this.seriesMyNextReady = false;
+    this.seriesBothNextReady = false;
+    clearInterval(this.seriesCountdownInterval);
+    this.redraw();
+    fetch(`/series/${seriesId}/cancelConfirmNext`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+  };
+
+  startSeriesCountdown = (): void => {
+    this.seriesNextCountdown = 3;
+    clearInterval(this.seriesCountdownInterval);
+    this.seriesCountdownInterval = setInterval(() => {
+      if (this.seriesNextCountdown > 0) {
+        this.seriesNextCountdown--;
+        this.redraw();
+      } else {
+        clearInterval(this.seriesCountdownInterval);
+      }
+    }, 1000) as unknown as number;
   };
 
   hasGoneBerserk = (color: Color): boolean => !!this.goneBerserk[color];

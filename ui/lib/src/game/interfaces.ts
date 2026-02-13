@@ -24,6 +24,12 @@ export interface Series {
   finished: boolean;
   currentOpening?: string;
   povIndex?: number;
+  phase?: number;
+  resting?: {
+    timeLeft: number;
+    myReady: boolean;
+    opponentReady: boolean;
+  };
   players: [SeriesPlayerInfo, SeriesPlayerInfo];
   openings: SeriesOpeningInfo[];
 }

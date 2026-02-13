@@ -332,6 +332,13 @@ final private[api] class RoundApi(
               "selectedBy"  -> op.selectedBy.map(_.toString.toLowerCase)
             )
         ).add("povIndex" -> pov.player.userId.flatMap(s.playerIndex))
+          .add("phase" -> s.phase.id.some)
+          .add("resting" -> Option.when(s.phase == lila.series.Series.Phase.Resting):
+            val myIdx = pov.player.userId.flatMap(s.playerIndex)
+            Json.obj("timeLeft" -> s.timeLeftInPhase)
+              .add("myReady" -> myIdx.map(i => s.player(i).confirmedNext))
+              .add("opponentReady" -> myIdx.map(i => s.player(1 - i).confirmedNext))
+          )
     )
 
   private def seriesPlayerJson(p: lila.series.SeriesPlayer) = Json.obj(
