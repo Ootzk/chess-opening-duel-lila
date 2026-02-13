@@ -35,6 +35,21 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
           Granter.opt(_.OpeningWiki).option(showMissing(wikiMissing))
         )
 
+  def pool(page: OpeningPage)(using ctx: Context) =
+    openingPage("Manage your opening pools", page.some):
+      main(cls := "page box box-pad opening opening--index")(
+        searchAndConfig(page.query.config, "", ""),
+        resultsList(Nil),
+        boxTop(
+          h1("Manage your opening pools"),
+          div(cls := "box__top__actions")(
+            a(href := routes.Opening.tree)("Name tree"),
+            a(href := s"${routes.UserAnalysis.index}#explorer")("Explorer")
+          )
+        ),
+        whatsNext(page) | p(cls := "opening__error")("Couldn't fetch the next moves, try again later.")
+      )
+
   def tree(root: OpeningTree, config: OpeningConfig)(using Context) =
     openingPage(trans.site.opening.txt(), none):
       main(cls := "page box box-pad opening opening--tree")(

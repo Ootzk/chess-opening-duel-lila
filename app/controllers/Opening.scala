@@ -25,6 +25,11 @@ final class Opening(env: Env) extends LilaController(env):
           .map:
             views.opening.ui.index(page, _)
 
+  def pool = Auth { ctx ?=> _ ?=>
+    FoundPage(env.opening.api.index): page =>
+      views.opening.ui.pool(page)
+  }
+
   private val ipRateLimit =
     env.security.ipTrust.rateLimit(50, 10.minutes, "opening.byKeyAndMoves", _.proxyMultiplier(3))
 

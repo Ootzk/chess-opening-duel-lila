@@ -51,6 +51,8 @@ export class LinksCtrl extends PaneCtrl {
 
           hl('a.text', linkCfg('/inbox', licon.Envelope), i18n.site.inbox),
 
+          hl('a.text', linkCfg('/opening-pool', licon.Book), 'Opening Pool'),
+
           hl(
             'a.text',
             linkCfg(
