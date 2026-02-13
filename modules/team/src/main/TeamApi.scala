@@ -119,18 +119,18 @@ final class TeamApi(
 
   def hasTeams(me: User): Fu[Boolean] = cached.teamIds(me.id).map(_.nonEmpty)
 
-  def joinedTeamIdsOfUserAsSeenBy(of: User)(using viewer: Option[Me]): Fu[List[TeamId]] =
+  def joinedTeamIdsOfUserAsSeenBy(of: User)(using me: Me): Fu[List[TeamId]] =
     cached
       .teamIdsList(of.id)
       .map(_.take(Team.maxJoin(of).value))
       .flatMap: allIds =>
-        if viewer.exists(_.is(of)) || Granter.opt(_.UserModView) then fuccess(allIds)
+        if Granter(_.UserModView) then fuccess(allIds)
         else
           allIds.nonEmpty.so:
             teamRepo.filterHideMembers(allIds).flatMap { hiddenIds =>
               if hiddenIds.isEmpty then fuccess(allIds)
               else
-                viewer.map(_.userId).fold(fuccess(Team.IdsStr.empty))(cached.teamIds).map { viewerTeamIds =>
+                cached.teamIds(me.userId).map { viewerTeamIds =>
                   allIds.filter: id =>
                     !hiddenIds(id) || viewerTeamIds.contains(id)
                 }
@@ -184,7 +184,7 @@ final class TeamApi(
   def requestable(team: Team)(using me: Me): Fu[Boolean] = for
     belongs <- isMember(team.id)
     requested <- requestRepo.exists(team.id, me)
-  yield !belongs && !requested
+  yield !team.isClas && !belongs && !requested
 
   def createRequest(team: Team, msg: String)(using me: Me): Funit =
     requestable(team).flatMapz:
@@ -343,14 +343,17 @@ final class TeamApi(
         if team.enabled then
           for
             _ <- teamRepo.disable(team)
-            users <- memberRepo.userIdsByTeam(team.id)
-            _ = users.foreach(cached.invalidateTeamIds)
+            _ <- invalidateTeamIdsOfMembers(team.id)
             _ <- requestRepo.removeByTeam(team.id)
           yield ()
         else
           for _ <- teamRepo.enable(team)
           yield Bus.pub(TeamUpdate(team.data, byMod = Granter(_.ManageTeam)))
       else memberRepo.setPerms(team.id, me, Set.empty)
+
+  def invalidateTeamIdsOfMembers(team: TeamId): Funit =
+    for users <- memberRepo.userIdsByTeam(team)
+    yield users.foreach(cached.invalidateTeamIds)
 
   def idAndLeaderIds(teamId: TeamId): Fu[Option[Team.IdAndLeaderIds]] =
     memberRepo
@@ -412,8 +415,8 @@ final class TeamApi(
   def withLeaders(team: Team): Fu[Team.WithLeaders] =
     memberRepo.leaders(team.id).map(Team.WithLeaders(team, _))
 
-  def filterExistingIds(ids: Set[TeamId]): Fu[Set[TeamId]] =
-    teamRepo.coll.distinctEasy[TeamId, Set]("_id", $inIds(ids), _.sec)
+  def filterExistingIdsNoClas(ids: Set[TeamId]): Fu[Set[TeamId]] =
+    teamRepo.coll.distinctEasy[TeamId, Set]("_id", $inIds(ids) ++ teamRepo.noClasSelect, _.sec)
 
   def autocomplete(term: String, max: Int): Fu[List[Team]] =
     teamRepo.coll

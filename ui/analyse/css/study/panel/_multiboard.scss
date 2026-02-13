@@ -20,6 +20,13 @@
   &__options {
     @extend %flex-center;
     gap: 1em;
+    .cmn-toggle-wrap {
+      font-size: 0.9em;
+      gap: 0;
+    }
+    .cmn-toggle {
+      transform: scale(0.7);
+    }
   }
 
   &__pager {

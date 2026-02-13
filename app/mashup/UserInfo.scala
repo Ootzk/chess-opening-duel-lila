@@ -121,11 +121,11 @@ object UserInfo:
         studyRepo.countByOwner(user.id).recoverDefault.mon(_.user.segment("nbStudies")),
         simulApi.countHostedByUser.get(user.id).mon(_.user.segment("nbSimuls")),
         relayApi.countOwnedByUser.get(user.id).mon(_.user.segment("nbBroadcasts")),
-        teamApi.joinedTeamIdsOfUserAsSeenBy(user).mon(_.user.segment("teamIds")),
+        ctx.useMe(teamApi.joinedTeamIdsOfUserAsSeenBy(user).mon(_.user.segment("teamIds"))),
         streamerApi.isActualStreamer(user).mon(_.user.segment("streamer")),
         coachApi.isListedCoach(user).mon(_.user.segment("coach")),
         fideIdOf(user.light),
-        (user.count.rated >= 10).so(insightShare.grant(user))
+        (user.count.rated >= 50).so(insightShare.grant(user))
       ).mapN(UserInfo(nbs, _, _, _, _, _, _, _, _, _, _, _, _, _, _))
 
     def preloadTeams(info: UserInfo) = teamCache.lightCache.preloadMany(info.teamIds)

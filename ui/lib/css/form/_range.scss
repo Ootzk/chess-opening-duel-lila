@@ -64,4 +64,14 @@ input.range {
     border-color: transparent;
     color: transparent;
   }
+
+  &:-moz-focusring::-moz-range-thumb {
+    outline: $outline;
+  }
+
+  &:focus-visible {
+    &::-webkit-slider-thumb {
+      outline: $outline;
+    }
+  }
 }

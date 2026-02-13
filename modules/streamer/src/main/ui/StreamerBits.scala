@@ -135,18 +135,23 @@ final class StreamerBits(helpers: Helpers)(picfitUrl: lila.memo.PicfitUrl):
     )
 
   def redirectLink(username: UserStr, isStreaming: Option[Boolean] = None): Tag =
-    isStreaming match
-      case Some(false) => a(href := routes.Streamer.show(username))
-      case _ => a(href := routes.Streamer.redirect(username), targetBlank, noFollow)
+    a(href := routes.Streamer.show(username, redirect = isStreaming | true))
 
-  def liveStreams(l: LiveStreams.WithTitles): Frag =
-    l.live.streams.map { s =>
-      redirectLink(s.streamer.id.into(UserStr))(cls := "stream highlight")(
-        strong(cls := "text", dataIcon := Icon.Mic)(l.titleName(s)),
-        " ",
-        s.cleanStatus
+  def liveStreams(l: LiveStreams.WithTitles)(using Translate): Frag =
+    st.section(cls := "lobby__streams")(
+      l.live.streams.map: s =>
+        redirectLink(s.streamer.id.into(UserStr))(cls := "stream highlight")(
+          strong(cls := "text", dataIcon := Icon.Mic)(l.titleName(s)),
+          " ",
+          s.cleanStatus
+        ),
+      l.live.streams.nonEmpty.option(
+        a(href := routes.Streamer.index(), cls := "more")(
+          trans.site.streamersMenu(),
+          " »"
+        )
       )
-    }
+    )
 
   def contextual(streamers: List[UserId])(using Translate): Option[Tag] =
     streamers.nonEmpty.option:
@@ -188,15 +193,13 @@ final class StreamerBits(helpers: Helpers)(picfitUrl: lila.memo.PicfitUrl):
   def subscribeButtonFor(s: Streamer.WithContext)(using ctx: Context): Option[Tag] =
     (ctx.isAuth && ctx.isnt(s.user)).option:
       val id = s"streamer-subscribe-${s.streamer.userId}"
-      label(cls := "streamer-subscribe")(
-        data("action") := s"${routes.Streamer.subscribe(s.streamer.userId, !s.subscribed)}"
-      )(
-        span(
-          form3.cmnToggle(
-            fieldId = id,
-            fieldName = id,
-            checked = s.subscribed
-          )
+      form3.cmnToggleWrap(
+        form3.cmnToggle(
+          id,
+          id,
+          s.subscribed,
+          action = routes.Streamer.subscribe(s.streamer.userId, !s.subscribed).url.some,
+          cssClass = "cmn-favourite"
         ),
         trans.site.subscribe()
       )

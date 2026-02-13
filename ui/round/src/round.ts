@@ -152,7 +152,7 @@ async function boot(
     }
   }
   startTournamentClock();
-  $('.round__now-playing .move-on input')
+  $('#round-toggle-autoswitch')
     .on('change', round.moveOn.toggle)
     .prop('checked', round.moveOn.get())
     .on('click', 'a', () => {

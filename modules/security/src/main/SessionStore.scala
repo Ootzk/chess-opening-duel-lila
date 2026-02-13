@@ -45,7 +45,7 @@ final class SessionStore(val coll: Coll, cacheApi: lila.memo.CacheApi)(using Exe
     authCache.underlying.synchronous.invalidate(sessionId)
 
   private[security] def save(
-      sessionId: SessionId,
+      signupSessionId: Option[SessionId], // none to reuse if possible, some for signup
       userId: UserId,
       req: RequestHeader,
       apiVersion: Option[ApiVersion],
@@ -53,22 +53,28 @@ final class SessionStore(val coll: Coll, cacheApi: lila.memo.CacheApi)(using Exe
       fp: Option[FingerPrint],
       proxy: lila.core.security.IsProxy,
       pwned: IsPwned
-  ): Funit =
-    coll.insert
-      .one:
-        $doc(
-          "_id" -> sessionId,
-          "user" -> userId,
-          "ip" -> HTTPRequest.ipAddress(req),
-          "ua" -> HTTPRequest.userAgent(req).some.filter(_ != UserAgent.zero),
-          "date" -> nowInstant,
-          "up" -> up,
-          "api" -> apiVersion, // lichobile
-          "fp" -> fp.flatMap(lila.security.FingerHash.from),
-          "proxy" -> proxy.yes.option(proxy),
-          "pwned" -> pwned.yes.option(true)
-        )
-      .void
+  ): Fu[SessionId] =
+    val prevSelector = $doc(
+      "user" -> userId,
+      "ip" -> HTTPRequest.ipAddress(req),
+      "ua" -> HTTPRequest.userAgent(req).some.filter(_ != UserAgent.zero),
+      "up" -> false
+    )
+    val update = $doc(
+      "up" -> up,
+      "date" -> nowInstant,
+      "api" -> apiVersion, // lichobile
+      "fp" -> fp.flatMap(lila.security.FingerHash.from),
+      "proxy" -> proxy.yes.option(proxy),
+      "pwned" -> pwned.yes.option(true)
+    )
+    signupSessionId.isEmpty
+      .so(coll.primitiveOne[SessionId](prevSelector, "_id"))
+      .flatMap:
+        case Some(prev) => coll.update.one($id(prev), $set(update)).inject(prev)
+        case None =>
+          val sid = signupSessionId | SessionId(scalalib.SecureRandom.nextString(22))
+          coll.insert.one($id(sid) ++ prevSelector ++ update).inject(sid)
 
   private[security] def upsertOAuth(
       userId: UserId,
@@ -129,7 +135,7 @@ final class SessionStore(val coll: Coll, cacheApi: lila.memo.CacheApi)(using Exe
     coll
       .find($doc("user" -> userId, "up" -> true))
       .sort($doc("date" -> -1))
-      .cursor[UserSession]()
+      .cursor[UserSession](ReadPref.sec)
       .list(nb)
 
   def allSessions(userId: UserId): AkkaStreamCursor[UserSession] =
@@ -159,7 +165,7 @@ final class SessionStore(val coll: Coll, cacheApi: lila.memo.CacheApi)(using Exe
         $doc("_id" -> false, "ip" -> true, "ua" -> true, "fp" -> true, "date" -> true).some
       )
       .sort($sort.desc("date"))
-      .cursor[Info]()
+      .cursor[Info](ReadPref.sec)
       .list(1000)
 
   // remains of never-confirmed accounts that got cleaned up
@@ -170,32 +176,27 @@ final class SessionStore(val coll: Coll, cacheApi: lila.memo.CacheApi)(using Exe
     def compositeKey = s"$ip $ua"
   private given BSONDocumentReader[DedupInfo] = Macros.reader
 
-  def dedup(userId: UserId, keepSessionId: SessionId): Funit =
-    coll
-      .find(
-        $doc(
-          "user" -> userId,
-          "up" -> true
-        )
-      )
+  def dedup(userId: UserId, keepSessionId: SessionId): Funit = for
+    sessions <- coll
+      .find($doc("user" -> userId, "up" -> true))
       .sort($doc("date" -> -1))
       .cursor[DedupInfo]()
       .list(1000)
-      .flatMap { sessions =>
-        val olds = sessions
-          .groupBy(_.compositeKey)
-          .view
-          .values
-          .flatMap(_.drop(1))
-          .filter(_._id != keepSessionId)
-          .map(_._id)
-        coll.delete.one($inIds(olds)).void
-      } >> uncacheAllOf(userId)
+    olds = sessions
+      .groupBy(_.compositeKey)
+      .view
+      .values
+      .flatMap(_.drop(1))
+      .filter(_._id != keepSessionId)
+      .map(_._id)
+    _ <- coll.delete.one($inIds(olds)).void
+    _ <- uncacheAllOf(userId)
+  yield ()
 
-  def shareAnIpOrFp(u1: UserId, u2: UserId): Fu[Boolean] =
+  def shareAnIpOrFp(users: PairOf[UserId]): Fu[Boolean] =
     coll.aggregateExists(_.sec): framework =>
       import framework.*
-      Match($doc("user".$in(List(u1, u2)))) -> List(
+      Match($doc("user".$in(users.asList))) -> List(
         Limit(500),
         Project(
           $doc(
@@ -214,9 +215,6 @@ final class SessionStore(val coll: Coll, cacheApi: lila.memo.CacheApi)(using Exe
         ),
         Limit(1)
       )
-
-  def ips(user: User): Fu[Set[IpAddress]] =
-    coll.distinctEasy[IpAddress, Set]("ip", $doc("user" -> user.id))
 
   private[security] def recentByIpExists(ip: IpAddress, since: FiniteDuration): Fu[Boolean] =
     coll.secondary.exists:

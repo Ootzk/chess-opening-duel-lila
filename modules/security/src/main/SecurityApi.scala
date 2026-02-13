@@ -130,8 +130,7 @@ final class SecurityApi(
             proxy <- ip2proxy.ofReq(req)
             _ = proxy.name.foreach: p =>
               logger.info(s"Proxy login $p $userId ${HTTPRequest.print(req)}")
-            sessionId = SessionId(SecureRandom.nextString(22))
-            _ <- store.save(sessionId, userId, req, apiVersion, up = true, fp = none, proxy, pwned)
+            sessionId <- store.save(none, userId, req, apiVersion, up = true, fp = none, proxy, pwned)
           yield sessionId
 
   def saveSignup(userId: UserId, apiVersion: Option[ApiVersion], fp: Option[FingerPrint], pwned: IsPwned)(
@@ -140,7 +139,7 @@ final class SecurityApi(
     for
       proxy <- ip2proxy.ofReq(req)
       sessionId = SessionId(s"SIG-${SecureRandom.nextString(22)}")
-      _ <- store.save(sessionId, userId, req, apiVersion, up = false, fp = fp, proxy, pwned)
+      _ <- store.save(sessionId.some, userId, req, apiVersion, up = false, fp = fp, proxy, pwned)
     yield ()
 
   private type AppealOrUser = Either[AppealUser, FingerPrintedUser]
@@ -243,7 +242,7 @@ final class SecurityApi(
 
     private val prefix = "appeal:"
 
-    private val store = cacheApi.notLoadingSync[SessionId, UserId](256, "security.session.appeal"):
+    private val store = cacheApi.notLoadingSync[SessionId, UserId](512, "security.session.appeal"):
       _.expireAfterAccess(2.days).build()
 
     def authenticate(sessionId: SessionId): Option[UserId] =

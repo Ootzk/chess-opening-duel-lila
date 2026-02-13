@@ -309,7 +309,7 @@ $hover-bg: $m-primary_bg--mix-30;
     .mselect__list {
       left: unset;
       right: 0;
-      overflow-x: hidden;
+      overflow-x: auto;
       overflow-y: auto;
       max-height: 50vh;
       @media (max-width: at-most($medium)) {
@@ -322,10 +322,10 @@ $hover-bg: $m-primary_bg--mix-30;
     }
     tr {
       display: table-row;
+      border-left: 3px solid transparent;
       &.current-round {
-        background: $m-primary_bg--mix-15;
-        border: 1px solid $m-primary_bg--mix-40;
-        border-width: 1px 0;
+        background: $c-bg-zebra;
+        border-left-color: $c-primary;
       }
       &:hover *,
       &:hover .round-state::before {
@@ -377,18 +377,11 @@ $hover-bg: $m-primary_bg--mix-30;
     gap: 1em;
     @include prevent-select;
   }
-  &__subscribe {
-    @extend %flex-center-nowrap;
-    gap: 1ch;
-    label {
-      cursor: pointer;
-    }
-  }
 
   &__tabs {
     @extend %flex-center;
     gap: 1em;
-    span {
+    button {
       @extend %box-radius;
       cursor: pointer;
       padding: 0.6em 1.5em;
@@ -561,6 +554,9 @@ $hover-bg: $m-primary_bg--mix-30;
     &__matches__header {
       @extend %tour-margin-horiz;
     }
+    &__roster {
+      overflow: auto;
+    }
     &__header {
       &__stats {
         @extend %tour-margin-horiz;
@@ -589,6 +585,7 @@ $hover-bg: $m-primary_bg--mix-30;
       td.game-link {
         width: 1%;
         white-space: nowrap;
+        padding-right: 2em;
         a.game-link {
           @extend %game-link-styles;
         }

@@ -75,8 +75,6 @@ case class RelayRound(
 
   def withTour(tour: RelayTour) = RelayRound.WithTour(this, tour)
 
-  def transName(using lila.core.i18n.Translate) = RelayRound.transName(name)
-
   override def toString = s"""relay #$id "$name" $sync"""
 
 object RelayRound:
@@ -87,7 +85,8 @@ object RelayRound:
   object Order extends OpaqueInt[Order]
 
   opaque type Name = String
-  object Name extends OpaqueString[Name]
+  object Name extends OpaqueString[Name]:
+    extension (name: Name) def translate(using lila.core.i18n.Translate) = RelayI18n(name)
 
   opaque type Caption = String
   object Caption extends OpaqueString[Caption]
@@ -167,6 +166,7 @@ object RelayRound:
           case lccRegex(id, round) => round.toIntOption.map(Lcc(id, _))
           case _ => none
         def looksLikeLcc = url.host.toString.endsWith("livechesscloud.com")
+        def looksLikeIdChess = url.host.toString.endsWith("idchess.com")
     import url.*
 
     enum Upstream:
@@ -182,6 +182,10 @@ object RelayRound:
       def hasLcc = this match
         case Url(url) => url.looksLikeLcc
         case Urls(urls) => urls.exists(_.looksLikeLcc)
+        case _ => false
+      def hasIdChess = this match
+        case Url(url) => url.looksLikeIdChess
+        case Urls(urls) => urls.exists(_.looksLikeIdChess)
         case _ => false
       def hasUnsafeHttp: Option[URL] = this match
         case Url(url) => Option.when(url.scheme == "http")(url)
@@ -214,8 +218,8 @@ object RelayRound:
     val tour: RelayTour
     def display: RelayRound
     def link: RelayRound
-    def fullName = s"${tour.name} • ${display.name}"
-    def transName(using Translate) = s"${tour.name} • ${display.transName}"
+    def fullNameNoTrans = s"${tour.name} • ${display.name}" // useful for logging
+    def fullName(using Translate) = s"${tour.name.translate} • ${display.name.translate}"
     def path = s"/broadcast/${tour.slug}/${if link.slug == tour.slug then "-" else link.slug}/${link.id}"
     def call: Call = Call("GET", path)
     def call(chapterId: StudyChapterId): Call = Call("GET", s"$path/$chapterId")
@@ -239,15 +243,6 @@ object RelayRound:
   case class WithTourAndStudy(relay: RelayRound, tour: RelayTour, study: Study):
     def withTour = WithTour(relay, tour)
     def call = withTour.call
-    def fullName = withTour.fullName
-    def transName(using Translate) = withTour.transName
 
   case class WithStudy(relay: RelayRound, study: Study):
     def withTour(tour: RelayTour) = WithTourAndStudy(relay, tour, study)
-
-  object transName:
-    import lila.core.i18n.{ I18nKey, Translate }
-    private val roundRegex = """(?i)Round (\d+)""".r
-    def apply(name: Name)(using Translate): String = name match
-      case roundRegex(number) => I18nKey.broadcast.roundX.txt(number)
-      case _ => name

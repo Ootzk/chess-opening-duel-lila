@@ -184,7 +184,6 @@ export interface ChapterPreviewFromServer extends ChapterPreviewBase {
   players?: PairOf<StudyPlayerFromServer>;
   thinkTime?: number; // seconds since last move
   orientation?: Color; // defaults to white
-  variant?: VariantKey; // defaults to standard
 }
 
 export interface ChapterPreview extends ChapterPreviewBase {
@@ -192,7 +191,6 @@ export interface ChapterPreview extends ChapterPreviewBase {
   players?: StudyPlayers;
   lastMoveAt?: number;
   orientation: Color;
-  variant: VariantKey;
   playing: boolean;
 }
 
@@ -205,6 +203,7 @@ export type FederationId = string;
 export interface Federation {
   id: FederationId;
   name: string;
+  i18nName?: string;
 }
 export interface StudyPlayerBase {
   name?: string;

@@ -1,6 +1,11 @@
 html {
   min-height: 100%;
   color-scheme: light dark;
+  @include mq-sticky-header {
+    :target {
+      scroll-margin-top: $site-header-outer-height;
+    }
+  }
 }
 
 *,
@@ -38,6 +43,13 @@ a {
   &:focus {
     color: $c-link-hover;
   }
+}
+
+button {
+  appearance: none;
+  background: none;
+  border: none;
+  color: inherit;
 }
 
 p {

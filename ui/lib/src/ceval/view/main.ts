@@ -2,7 +2,8 @@
 
 import { povChances } from '../winningChances';
 import * as licon from '@/licon';
-import { stepwiseScroll, type VNode, type LooseVNodes, onInsert, bind, hl } from '@/view';
+import { stepwiseScroll, type VNode, type LooseVNodes, bind, hl } from '@/view';
+import { cmnToggle } from '@/view/cmn-toggle';
 import { defined, notNull, requestIdleCallback } from '@/index';
 import { type CevalHandler, type NodeEvals, CevalState } from '../types';
 import type { Position } from 'chessops/chess';
@@ -255,24 +256,16 @@ export function renderCeval(ctrl: CevalHandler): VNode[] {
   ].filter(v => v != null);
 }
 
-export function renderCevalSwitch(ctrl: CevalHandler): VNode | false {
-  return (
-    ctrl.cevalEnabled() !== 'force' &&
-    hl('div.switch', { attrs: { role: 'button', title: i18n.site.toggleLocalEvaluation + ' (L)' } }, [
-      hl('input#analyse-toggle-ceval.cmn-toggle.cmn-toggle--subtle', {
-        attrs: { type: 'checkbox', disabled: !ctrl.ceval.analysable, checked: ctrl.cevalEnabled() },
-        props: { checked: !ctrl.ceval.isPaused && ctrl.cevalEnabled() },
-        hook: onInsert((el: HTMLInputElement) => {
-          el.addEventListener('change', () => ctrl.cevalEnabled(el.checked));
-          el.addEventListener('keydown', e => {
-            if (e.key === 'Enter' || e.key === ' ') ctrl.cevalEnabled(el.checked);
-          });
-        }),
-      }),
-      hl('label', { attrs: { for: 'analyse-toggle-ceval' } }),
-    ])
-  );
-}
+export const renderCevalSwitch = (ctrl: CevalHandler): VNode | false =>
+  ctrl.cevalEnabled() !== 'force' &&
+  cmnToggle({
+    id: 'analyse-toggle-ceval',
+    title: i18n.site.toggleLocalEvaluation + ' (L)',
+    checked: !!ctrl.cevalEnabled(),
+    propsChecked: !ctrl.ceval.isPaused && !!ctrl.cevalEnabled(),
+    change: ctrl.cevalEnabled,
+    disabled: !ctrl.ceval.analysable,
+  });
 
 function getElFen(el: HTMLElement): string {
   return el.getAttribute('data-fen')!;

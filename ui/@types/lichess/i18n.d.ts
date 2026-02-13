@@ -243,6 +243,10 @@ interface I18n {
     boards: string;
     /** Boards can be loaded with a source or via the %s */
     boardsCanBeLoaded: I18nFormat;
+    /** Boys */
+    boysTournament: string;
+    /** Boys U%s */
+    boysUnderXAgeTournament: I18nFormat;
     /** Broadcast calendar */
     broadcastCalendar: string;
     /** Broadcasts */
@@ -283,20 +287,40 @@ interface I18n {
     fideProfile: string;
     /** FIDE rating category */
     fideRatingCategory: string;
+    /** Finals */
+    finals: string;
     /** Full tournament description */
     fullDescription: string;
     /** Optional long description of the tournament. %1$s is available. Length must be less than %2$s characters. */
     fullDescriptionHelp: I18nFormat;
+    /** Game Points */
+    gamePoints: string;
     /** Games in this tournament */
     gamesThisTournament: string;
+    /** Game %s */
+    gameX: I18nFormat;
+    /** Girls */
+    girlsTournament: string;
+    /** Girls U%s */
+    girlsUnderXAgeTournament: I18nFormat;
     /** How to use Lichess Broadcasts. */
     howToUseLichessBroadcasts: string;
     /** More options on the %s */
     iframeHelp: I18nFormat;
+    /** Knockouts */
+    knockouts: string;
     /** Live board */
     liveboard: string;
     /** Live tournament broadcasts */
     liveBroadcasts: string;
+    /** Matches */
+    matches: string;
+    /** Match History */
+    matchHistory: string;
+    /** Match Points */
+    matchPoints: string;
+    /** Men */
+    menTournament: string;
     /** My broadcasts */
     myBroadcasts: string;
     /** %s broadcasts */
@@ -317,12 +341,18 @@ interface I18n {
     ongoing: string;
     /** Open in Lichess */
     openLichess: string;
+    /** Open */
+    openTournament: string;
+    /** Open U%s */
+    openUnderXAgeTournament: I18nFormat;
     /** Optional details */
     optionalDetails: string;
     /** Overview */
     overview: string;
     /** Past broadcasts */
     pastBroadcasts: string;
+    /** Quarterfinals */
+    quarterfinals: string;
     /** Rating diff */
     ratingDiff: string;
     /** Recent tournaments */
@@ -337,6 +367,8 @@ interface I18n {
     roundX: I18nFormat;
     /** Score */
     score: string;
+    /** Semifinals */
+    semifinals: string;
     /** Show players scores based on game results */
     showScores: string;
     /** Since you chose to hide the results, all the preview boards are empty to avoid spoilers. */
@@ -347,6 +379,8 @@ interface I18n {
     sourceSingleUrl: string;
     /** URL that Lichess will check to get PGN updates. It must be publicly accessible from the Internet. */
     sourceUrlHelp: string;
+    /** Standings are calculated using broadcasted games and may differ from official results. */
+    standingsDisclaimer: string;
     /** Optional, if you know when the event starts */
     startDateHelp: string;
     /** Start date in the tournament local timezone: %s */
@@ -359,10 +393,16 @@ interface I18n {
     subscribedBroadcasts: string;
     /** Subscribe to be notified when each round starts. You can toggle bell or push notifications for broadcasts in your account preferences. */
     subscribeTitle: string;
+    /** Team Results */
+    teamResults: string;
     /** Teams */
     teams: string;
+    /** The following term(s) will be automatically translated: %s. */
+    termsAutomaticallyTranslated: I18nFormat;
     /** The new round will have the same members and contributors as the previous one. */
     theNewRoundHelp: string;
+    /** Tiebreaks */
+    tiebreaks: string;
     /** Time zone */
     timezone: string;
     /** Top 10 rating */
@@ -385,6 +425,8 @@ interface I18n {
     uploadImage: string;
     /** webmasters page */
     webmastersPage: string;
+    /** Women */
+    womenTournament: string;
   };
   challenge: {
     /** Cannot challenge due to provisional %s rating. */
@@ -2617,6 +2659,10 @@ interface I18n {
     endgameDescription: string;
     /** A tactic involving the en passant rule, where a pawn can capture an opponent pawn that has bypassed it using its initial two-square move. */
     enPassantDescription: string;
+    /** Epaulette mate */
+    epauletteMate: string;
+    /** Two adjacent escape squares for a checked king are occupied by other pieces. */
+    epauletteMateDescription: string;
     /** Equality */
     equality: string;
     /** Come back from a losing position, and secure a draw or a balanced position. (eval ≤ 200cp) */
@@ -2779,6 +2825,10 @@ interface I18n {
     superGM: string;
     /** Puzzles from games played by the best players in the world. */
     superGMDescription: string;
+    /** Swallow's tail mate */
+    swallowstailMate: string;
+    /** A checkmate pattern that visually resembles the appearance of a swallow’s tail, similar to a V shape. */
+    swallowstailMateDescription: string;
     /** Trapped piece */
     trappedPiece: string;
     /** A piece is unable to escape capture as it has limited moves. */
@@ -3673,8 +3723,6 @@ interface I18n {
     keyNextBranch: string;
     /** Next inaccuracy */
     keyNextInaccuracy: string;
-    /** Next (Learn from your mistakes) */
-    keyNextLearnFromYourMistakes: string;
     /** Next mistake */
     keyNextMistake: string;
     /** Previous branch */

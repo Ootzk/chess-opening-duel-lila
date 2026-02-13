@@ -276,6 +276,9 @@ final class UserRepo(c: Coll)(using Executor) extends lila.core.user.UserRepo(c)
       .map:
         _.flatMap { _.getAsOpt[UserId](F.id) }
 
+  def idLikeCanBeVeryExpensive(regex: String): Fu[List[User]] =
+    coll.find(F.id.$regex(regex) ++ enabledSelect).cursor[User](ReadPref.sec).list(200)
+
   private def setMark(mark: UserMark)(id: UserId, v: Boolean): Funit =
     coll.update.one($id(id), $addOrPull(F.marks, mark, v)).void
 
@@ -573,6 +576,9 @@ final class UserRepo(c: Coll)(using Executor) extends lila.core.user.UserRepo(c)
 
   def filterClosedOrInactiveIds(since: Instant)(ids: Iterable[UserId]): Fu[List[UserId]] =
     coll.distinctEasy[UserId, List](F.id, $inIds(ids) ++ $or(disabledSelect, F.seenAt.$lt(since)), _.sec)
+
+  def filterSeenSince(since: Instant)(ids: Iterable[UserId]): Fu[List[UserId]] =
+    coll.distinctEasy[UserId, List](F.id, $inIds(ids) ++ F.seenAt.$gt(since), _.sec)
 
   def createdWithApiVersion(userId: UserId) =
     coll.primitiveOne[ApiVersion]($id(userId), F.createdWithApiVersion)

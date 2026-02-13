@@ -536,7 +536,8 @@ object mon:
     val crazyGlicko = counter("puzzle.crazyGlicko").withoutTags()
   object storm:
     object selector:
-      val time = timer("storm.selector.time").withoutTags()
+      val time = future("storm.selector.time")
+      val sets = histogram("storm.selector.sets").withoutTags()
       val count = histogram("storm.selector.count").withoutTags()
       val rating = histogram("storm.selector.rating").withoutTags()
       def ratingSlice(index: Int) = histogram("storm.selector.ratingSlice").withTag("index", index)
@@ -581,6 +582,9 @@ object mon:
       def decode(format: String) = timer("game.pgn.decode").withTag("format", format)
     val idCollision = counter("game.idCollision").withoutTags()
     def idGenerator(collisions: Int) = timer("game.idGenerator").withTags(tags("collisions" -> collisions))
+    object streamByOauthOrigin:
+      def event(tpe: String) = counter("game.streamByOauthOrigin.event").withTag("type", tpe)
+      def users(sel: String) = gauge("game.streamByOauthOrigin.users").withTag("selector", sel)
   object chat:
     private val msgCounter = counter("chat.message")
     def message(parent: String, troll: Boolean) =
@@ -665,6 +669,8 @@ object mon:
         tags("variant" -> variant.key, "hit" -> hitTag(hit))
   object opening:
     def searchTime = timer("opening.search.time").withoutTags()
+    object explorer:
+      def stats = future("opening.explorer.stats")
   object study:
     object tree:
       val read = timer("study.tree.read").withoutTags()

@@ -38,7 +38,7 @@ final class Study(
             else if HTTPRequest.isCrawler(req).yes then 80
             else if ctx.isAnon then 100
             else 200
-          text.trim.some.filter(_.nonEmpty).filter(_.sizeIs > 2).filter(_.sizeIs < maxLen) match
+          text.trim.nonEmptyOption.filter(_.sizeIs > 2).filter(_.sizeIs < maxLen) match
             case None =>
               for
                 pag <- env.study.pager.all(Orders.default, page)
@@ -204,11 +204,8 @@ final class Study(
       study <- env.relay.api.reconfigureStudy(studyFromDb, chapter)
       previews <- withChapters.optionFu(env.study.preview.jsonList(study.id))
       _ <- env.user.lightUserApi.preloadMany(study.members.ids.toList)
-      fedNames <- env.study.preview.federations.get(sc.study.id)
       pov = userAnalysisC.makePov(chapter.root.fen.some, chapter.setup.variant)
-      analysis <- chapter.serverEval
-        .exists(_.done)
-        .so(env.analyse.analyser.byId(Analysis.Id(study.id, chapter.id)))
+      analysis <- chapterAnalysis(sc)
       division = analysis.isDefined.option(env.study.serverEvalMerger.divisionOf(chapter))
       baseData <- env.analyse.externalEngine.withExternalEngines(
         env.round.jsonView.userAnalysisJson(
@@ -221,7 +218,7 @@ final class Study(
         )
       )
       withMembers = !study.isRelay || isGrantedOpt(_.StudyAdmin) || ctx.me.exists(study.isMember)
-      studyJson <- env.study.jsonView.full(study, chapter, previews, fedNames.some, withMembers = withMembers)
+      studyJson <- env.study.jsonView.full(study, chapter, previews, withMembers = withMembers)
       lichobile = HTTPRequest.isLichobile(ctx.req)
     yield WithChapter(study, chapter) -> JsData(
       study = studyJson,
@@ -229,6 +226,11 @@ final class Study(
         .add("treeParts" -> partitionTreeWriter(chapter.root, lichobile = lichobile).some)
         .add("analysis" -> analysis.map { env.analyse.jsonView.bothPlayers(chapter.root.ply, _) })
     )
+
+  private def chapterAnalysis(sc: WithChapter) =
+    sc.chapter.serverEval
+      .exists(_.done)
+      .so(env.analyse.analyser.byId(Analysis.Id(sc.study.id, sc.chapter.id)))
 
   def show(id: StudyId) = OpenOrScoped(_.Study.Read, _.Web.Mobile):
     orRelayRedirect(id):
@@ -429,21 +431,27 @@ final class Study(
       studyNotFound: => Fu[Result],
       studyUnauthorized: StudyModel => Fu[Result],
       studyForbidden: StudyModel => Fu[Result]
-  )(using ctx: Context) =
+  )(using Context) =
     env.study.api
       .byIdWithChapter(id, chapterId)
       .flatMap:
         _.fold(studyNotFound) { case sc @ WithChapter(study, chapter) =>
           CanView(study) {
             def makeChapterPgn = env.study.pgnDump.ofChapter(study, requestPgnFlags)(chapter)
-            val pgnFu =
-              if study.isRelay
-              then env.relay.pgnStream.ofChapter(sc).getOrElse(makeChapterPgn)
-              else makeChapterPgn
-            pgnFu.map: pgn =>
-              Ok(pgn.toString)
-                .asAttachment(s"${env.study.pgnDump.filename(study, chapter)}.pgn")
-                .as(pgnContentType)
+            for
+              pgn <-
+                if study.isRelay
+                then env.relay.pgnStream.ofChapter(sc).getOrElse(makeChapterPgn)
+                else makeChapterPgn
+              analysisJson <- getBool("analysisHeader").so:
+                chapterAnalysis(sc).map2: analysis =>
+                  val division = env.study.serverEvalMerger.divisionOf(chapter)
+                  env.analyse.jsonView.analysisHeader(sc.chapter.root, division, analysis)
+              filename = s"${env.study.pgnDump.filename(study, chapter)}.pgn"
+              res = Ok(pgn.toString).as(pgnContentType).asAttachment(filename)
+              resWithAnalysis = analysisJson.fold(res): a =>
+                res.withHeaders("X-Lichess-Analysis" -> Json.stringify(a))
+            yield resWithAnalysis
           }(studyUnauthorized(study), studyForbidden(study))
         }
 

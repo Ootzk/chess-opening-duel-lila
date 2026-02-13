@@ -378,7 +378,7 @@ lazy val study = module("study",
 lazy val relay = module("relay",
   Seq(study, game, report),
   Seq(chess.tiebreak) ++ tests.bundle
-)
+).dependsOn(coreI18n % "test->test")
 
 lazy val studySearch = module("studySearch",
   Seq(study, search),

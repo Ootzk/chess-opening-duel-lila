@@ -76,7 +76,7 @@ def games(
                     st.value := "all"
                   )
                 ),
-                thSortNumber(dataSortAsc)("Opponent"),
+                thSortNumber("Opponent"),
                 thSortNumber("Speed"),
                 th(iconTag(Icon.Trophy)),
                 thSortNumber("Moves"),
@@ -160,7 +160,7 @@ def games(
                     ,
                     td(dataSort := pov.game.movedAt.toSeconds.toString):
                       a(href := routes.Round.watcher(pov.gameId, pov.color), cls := "glpt"):
-                        momentFromNowServerText(pov.game.movedAt)
+                        pastMomentServerText(pov.game.movedAt)
                   )
               }
             )
