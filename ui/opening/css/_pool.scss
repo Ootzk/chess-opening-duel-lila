@@ -25,13 +25,31 @@
     text-align: left !important;
   }
 
-  &__header-color {
-    width: 5em;
+  &__header-remove {
+    width: 3em;
   }
 
   &__row {
     &:not(:last-child) {
       border-bottom: 1px solid rgba($c-border, 0.5);
+    }
+
+    &--white {
+      background: #f0f0f0;
+      color: #333;
+
+      a {
+        color: #1a5276;
+      }
+    }
+
+    &--black {
+      background: #444;
+      color: #f0f0f0;
+
+      a {
+        color: #7ec8e3;
+      }
     }
   }
 
@@ -39,7 +57,8 @@
     text-align: center;
     padding: 0.4em 0.6em;
     font-weight: bold;
-    color: $c-font-dim;
+    color: inherit;
+    opacity: 0.6;
   }
 
   &__opening {
@@ -55,12 +74,80 @@
     }
   }
 
-  &__color {
+  &__remove-cell {
     text-align: center;
-    padding: 0.4em 0.6em;
+    padding: 0.2em;
+  }
 
-    .color-icon {
-      font-size: 1.3em;
+  &__remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.5;
+    padding: 0.3em;
+    border-radius: 3px;
+    line-height: 1;
+
+    &:hover:not([disabled]) {
+      color: $c-error;
+      opacity: 1;
+      background: rgba($c-error, 0.1);
+    }
+
+    &[disabled] {
+      cursor: not-allowed;
+      opacity: 0.3;
+    }
+  }
+}
+
+.opening__pool-add {
+  display: flex;
+  gap: 0.5em;
+  max-width: 17em;
+  margin-top: -1em;
+  align-self: center;
+
+  &__btn {
+    @extend %button-none, %box-radius;
+    flex: 1;
+    padding: 0.8em 1em;
+    font-size: 0.9em;
+    font-weight: 500;
+    text-align: center;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &--white {
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #ccc;
+
+      &:hover:not([disabled]) {
+        background: #e0e0e0;
+      }
+    }
+
+    &--black {
+      background: #444;
+      color: #f0f0f0;
+      border: 1px solid #666;
+
+      &:hover:not([disabled]) {
+        background: #555;
+      }
+    }
+
+    &[disabled],
+    &.disabled {
+      cursor: not-allowed;
+      opacity: 0.4;
+      background: linear-gradient(135deg, #b0b0b0, #d0d0d0, #a0a0a0);
+      color: #666;
+      border-color: #999;
     }
   }
 }

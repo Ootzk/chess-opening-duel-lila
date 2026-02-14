@@ -2,6 +2,7 @@ import Lpv from '@lichess-org/pgn-viewer';
 import type { Opts } from '@lichess-org/pgn-viewer/interfaces';
 import { initMiniBoards } from 'lib/view';
 import { requestIdleCallback } from 'lib';
+import { text as xhrText } from 'lib/xhr';
 import type { OpeningPage } from './interfaces';
 import { renderHistoryChart } from './chart';
 import { init as searchEngine } from './search';
@@ -9,6 +10,7 @@ import panels from './panels';
 import renderPlaceholderWiki from './wiki';
 
 export function initModule(data?: OpeningPage): void {
+  initPoolHandlers();
   data ? page(data) : searchEngine();
 }
 
@@ -74,3 +76,57 @@ const highlightNextPieces = () => {
       });
   });
 };
+
+function initPoolHandlers(): void {
+  // Remove button (event delegation)
+  $(document).on('click', '.opening__pool__remove:not([disabled])', function (this: HTMLButtonElement) {
+    const id = this.dataset['id'];
+    const color = this.dataset['color'];
+    if (!id || !color) return;
+    xhrText(`/opening-pool/remove/${id}/${color}`, {
+      method: 'POST',
+    }).then(html => {
+      $('.opening__pool').replaceWith(html);
+      updateAddButtonStates();
+    });
+  });
+
+  // Add button
+  $(document).on('click', '.opening__pool-add__btn:not([disabled])', function (this: HTMLButtonElement) {
+    const { openingName, openingFen, openingUrl, color } = this.dataset;
+    xhrText('/opening-pool/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: openingName, fen: openingFen, url: openingUrl, color }),
+    }).then(html => {
+      const pool = $('.opening__pool');
+      if (pool.length) pool.replaceWith(html);
+      else $('.opening__search-config').before(html);
+      updateAddButtonStates();
+    });
+  });
+}
+
+function updateAddButtonStates(): void {
+  // Collect (name, color) pairs from pool table
+  const poolEntries = new Set<string>();
+  let poolSize = 0;
+  $('.opening__pool__row').each(function (this: HTMLTableRowElement) {
+    const name = $(this).find('.opening__pool__opening a').text().trim();
+    const colorEl = $(this).find('.color-icon')[0];
+    if (name && colorEl) {
+      const color = colorEl.classList.contains('white') ? 'white' : 'black';
+      poolEntries.add(`${name}:${color}`);
+      poolSize++;
+    }
+  });
+  const isFull = poolSize >= 10;
+  $('.opening__pool-add__btn').each(function (this: HTMLButtonElement) {
+    const name = this.dataset['openingName'] || '';
+    const color = this.dataset['color'] || '';
+    const inPool = poolEntries.has(`${name}:${color}`);
+    const dis = inPool || isFull;
+    this.disabled = dis;
+    this.classList.toggle('disabled', dis);
+  });
+}

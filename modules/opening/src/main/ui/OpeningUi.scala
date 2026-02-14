@@ -10,7 +10,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
   import helpers.{ *, given }
   import bits.*
 
-  def index(page: OpeningPage, wikiMissing: List[Opening], poolData: List[(String, String, String)] = Nil)(using ctx: Context) =
+  def index(page: OpeningPage, wikiMissing: List[Opening], poolData: List[(String, String, String, String)] = Nil)(using ctx: Context) =
     openingPage(trans.site.opening.txt(), page.some)
       .graph(
         OpenGraph(
@@ -36,7 +36,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
           Granter.opt(_.OpeningWiki).option(showMissing(wikiMissing))
         )
 
-  def pool(page: OpeningPage, userPool: List[(String, String, String)])(using ctx: Context) =
+  def pool(page: OpeningPage, userPool: List[(String, String, String, String)])(using ctx: Context) =
     openingPage("Manage your opening pools", page.some):
       main(cls := "page box box-pad opening opening--index")(
         boxTop(
@@ -52,7 +52,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
         whatsNext(page) | p(cls := "opening__error")("Couldn't fetch the next moves, try again later.")
       )
 
-  def tree(root: OpeningTree, config: OpeningConfig, poolData: List[(String, String, String)] = Nil)(using Context) =
+  def tree(root: OpeningTree, config: OpeningConfig, poolData: List[(String, String, String, String)] = Nil)(using Context) =
     openingPage(trans.site.opening.txt(), none):
       main(cls := "page box box-pad opening opening--tree")(
         poolTable(poolData),
@@ -70,7 +70,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
         )
       )
 
-  def show(page: OpeningPage, puzzleKey: Option[String], poolData: List[(String, String, String)] = Nil)(using ctx: Context) =
+  def show(page: OpeningPage, puzzleKey: Option[String], poolData: List[(String, String, String, String)] = Nil)(using ctx: Context) =
     openingPage(s"${trans.site.opening.txt()} • ${page.name}", page.some)
       .graph(
         OpenGraph(
@@ -133,7 +133,32 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
                     cls := "button text",
                     dataIcon := Icon.Book,
                     href := s"${routes.UserAnalysis.pgn(page.query.sans.mkString("_"))}#explorer"
-                  )(trans.site.openingExplorer())
+                  )(trans.site.openingExplorer()),
+                  page.query.exactOpening.filter(_ => poolData.nonEmpty).map { opening =>
+                    val isFull      = poolData.size >= 10
+                    val whiteInPool = poolData.exists(d => d._2 == opening.name.value && d._4 == "white")
+                    val blackInPool = poolData.exists(d => d._2 == opening.name.value && d._4 == "black")
+                    val disWhite    = whiteInPool || isFull
+                    val disBlack    = blackInPool || isFull
+                    div(cls := "opening__pool-add")(
+                      button(
+                        cls := s"opening__pool-add__btn opening__pool-add__btn--white${if disWhite then " disabled" else ""}",
+                        disabled := disWhite.option("disabled"),
+                        st.data("opening-name") := opening.name.value,
+                        st.data("opening-fen") := page.query.fen.value,
+                        st.data("opening-url") := bits.openingUrl(opening).url,
+                        st.data("color") := "white"
+                      )("Play as White"),
+                      button(
+                        cls := s"opening__pool-add__btn opening__pool-add__btn--black${if disBlack then " disabled" else ""}",
+                        disabled := disBlack.option("disabled"),
+                        st.data("opening-name") := opening.name.value,
+                        st.data("opening-fen") := page.query.fen.value,
+                        st.data("opening-url") := bits.openingUrl(opening).url,
+                        st.data("color") := "black"
+                      )("Play as Black")
+                    )
+                  }
                 ),
                 page.explored.fold(
                   _ =>
@@ -220,7 +245,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
       if fold then details(content) else content
     }
 
-  private def poolTable(userPool: List[(String, String, String)]) =
+  def poolTableSnippet(userPool: List[(String, String, String, String)]) =
     if userPool.isEmpty then emptyFrag
     else div(cls := "opening__pool")(
       table(cls := "opening__pool__table")(
@@ -228,22 +253,31 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
           tr(
             th(cls := "opening__pool__header-num")("#"),
             th(cls := "opening__pool__header-opening")("Opening"),
-            th(cls := "opening__pool__header-color")("Color")
+            th(cls := "opening__pool__header-remove")
           )
         ),
         tbody(
           userPool.zipWithIndex.map: (entry, idx) =>
-            val (name, url, colorName) = entry
-            tr(cls := "opening__pool__row")(
+            val (id, name, url, colorName) = entry
+            val canRemove = userPool.size > 5
+            tr(cls := s"opening__pool__row opening__pool__row--$colorName")(
               td(cls := "opening__pool__num")(idx + 1),
               td(cls := "opening__pool__opening")(a(href := url)(name)),
-              td(cls := "opening__pool__color")(
-                span(cls := s"color-icon is $colorName")
+              td(cls := "opening__pool__remove-cell")(
+                button(
+                  cls := "opening__pool__remove",
+                  disabled := (!canRemove).option("disabled"),
+                  st.data("id") := id,
+                  st.data("color") := colorName
+                )(iconTag(Icon.Cancel))
               )
             )
         )
       )
     )
+
+  private def poolTable(userPool: List[(String, String, String, String)]) =
+    poolTableSnippet(userPool)
 
   private def exampleGames(page: OpeningPage) =
     div(cls := "opening__games")(page.exploredOption.so(_.games).map { game =>
