@@ -134,5 +134,9 @@ function updateAddButtonStates(): void {
     const dis = inPool || isFull || isImbalanced;
     this.disabled = dis;
     this.classList.toggle('disabled', dis);
+    if (isImbalanced) return; // server-rendered tooltip preserved
+    if (inPool) this.title = 'Already in your pool';
+    else if (isFull) this.title = 'Pool is full (10/10)';
+    else this.removeAttribute('title');
   });
 }

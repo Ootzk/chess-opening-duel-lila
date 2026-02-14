@@ -148,13 +148,18 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
                         f"Win rate too imbalanced (White ${exp.result.whitePercent}%.0f%% / Black ${exp.result.blackPercent}%.0f%%)"
                       )
                     }
+                    def btnTitle(inPool: Boolean): Option[String] =
+                      if isImbalanced then imbalanceTitle
+                      else if inPool then Some("Already in your pool")
+                      else if isFull then Some("Pool is full (10/10)")
+                      else None
                     val disWhite = whiteInPool || isFull || isImbalanced
                     val disBlack = blackInPool || isFull || isImbalanced
                     div(cls := "opening__pool-add")(
                       button(
                         cls := s"opening__pool-add__btn opening__pool-add__btn--white${if disWhite then " disabled" else ""}",
                         disabled := disWhite.option("disabled"),
-                        imbalanceTitle.map(t => title := t),
+                        btnTitle(whiteInPool).map(t => title := t),
                         st.data("opening-name") := opening.name.value,
                         st.data("opening-fen") := page.query.fen.value,
                         st.data("opening-url") := bits.openingUrl(opening).url,
@@ -164,7 +169,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
                       button(
                         cls := s"opening__pool-add__btn opening__pool-add__btn--black${if disBlack then " disabled" else ""}",
                         disabled := disBlack.option("disabled"),
-                        imbalanceTitle.map(t => title := t),
+                        btnTitle(blackInPool).map(t => title := t),
                         st.data("opening-name") := opening.name.value,
                         st.data("opening-fen") := page.query.fen.value,
                         st.data("opening-url") := bits.openingUrl(opening).url,
