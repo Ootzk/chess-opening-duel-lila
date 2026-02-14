@@ -255,9 +255,14 @@ export function moretime(ctrl: RoundController): LooseVNode {
 
 export function seriesRestFollowUp(ctrl: RoundController): VNode {
   const hurry = ctrl.seriesRestTimeLeft <= 10;
+  const isLastGame = ctrl.seriesIsLastGame;
   const timerText = ctrl.seriesBothNextReady
-    ? `Game starting in ${ctrl.seriesNextCountdown}...`
-    : `Next game starts in ${ctrl.seriesRestTimeLeft}`;
+    ? isLastGame
+      ? `Showing results in ${ctrl.seriesNextCountdown}...`
+      : `Game starting in ${ctrl.seriesNextCountdown}...`
+    : isLastGame
+      ? `Results in ${ctrl.seriesRestTimeLeft}`
+      : `Next game starts in ${ctrl.seriesRestTimeLeft}`;
   return hl('div.follow-up.series-rest', [
     hl('div.series-rest__timer', { class: { hurry: hurry && !ctrl.seriesBothNextReady } }, timerText),
     hl('div.series-rest__actions', [
@@ -270,7 +275,7 @@ export function seriesRestFollowUp(ctrl: RoundController): VNode {
         : hl(
             'button.button.button-green.series-rest__confirm',
             { hook: bind('click', () => ctrl.confirmNextGame()) },
-            'Confirm',
+            isLastGame ? 'View result' : 'Confirm',
           ),
       hl(
         'div.series-rest__opponent-status',
@@ -285,7 +290,7 @@ export function followUp(ctrl: RoundController): VNode {
   const d = ctrl.data;
 
   // Series resting: show rest UI instead of rematch/analysis
-  if (d.series && !d.series.finished && ctrl.seriesResting) {
+  if (d.series && ctrl.seriesResting) {
     return seriesRestFollowUp(ctrl);
   }
 

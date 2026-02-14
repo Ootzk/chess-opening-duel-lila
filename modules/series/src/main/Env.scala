@@ -106,7 +106,8 @@ final class Env(
   // When entering Resting phase (between games) - notify round socket clients
   Bus.sub[SeriesEnterResting]:
     case SeriesEnterResting(s, oldGameId) =>
-      Bus.pub(lila.game.actorApi.NotifySeriesResting(s.id, oldGameId, s.timeLeftInPhase))
+      val isLastGame = s.isFinished || s.unusedRemainingPicks.isEmpty
+      Bus.pub(lila.game.actorApi.NotifySeriesResting(s.id, oldGameId, s.timeLeftInPhase, isLastGame))
 
   // When entering Selecting phase (Game 2+ with winner)
   Bus.sub[SeriesEnterSelecting]:

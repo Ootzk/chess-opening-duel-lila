@@ -331,8 +331,11 @@ final class SeriesApi(
             val updated = s.finishGame(gameId, result)
 
             if updated.isFinished then
-              val finished = updated.setPhase(Series.Phase.Finished)
-              repo.update(finished).map(_ => Bus.pub(SeriesFinished(finished)))
+              // 리캡을 위해 Resting phase 진입 (status는 finishGame 모델에서 이미 Finished로 설정됨)
+              val resting = updated.updatePlayers(_.clearNext).setPhase(Series.Phase.Resting)
+              repo.update(resting).map: _ =>
+                Bus.pub(SeriesPhaseChanged(resting))
+                Bus.pub(SeriesEnterResting(resting, gameId))
             else if isDisconnectForfeit && winnerIndex.isDefined then
               // 상대 disconnect로 게임 종료 → 시리즈 전체 forfeit
               val loserIdx = 1 - winnerIndex.get
@@ -402,37 +405,42 @@ final class SeriesApi(
   private def transitionFromResting(seriesId: SeriesId): Unit =
     repo.byId(seriesId).foreach:
       case Some(s) if s.phase == Series.Phase.Resting =>
-        val lastGame = s.games.maxByOption(_.round)
-        lastGame.foreach: game =>
-          val oldGameId = game.gameId
-          val winnerIndex = game.result.flatMap:
-            case GameResult.WhiteWins => Some(game.whitePlayerIndex)
-            case GameResult.BlackWins => Some(1 - game.whitePlayerIndex)
-            case GameResult.Draw      => None
+        if s.isFinished then
+          // 시리즈 결과 확정됨 (마지막 게임 리캡 후) → Finished phase로 전환
+          val finished = s.setPhase(Series.Phase.Finished)
+          repo.update(finished).foreach(_ => Bus.pub(SeriesFinished(finished)))
+        else
+          val lastGame = s.games.maxByOption(_.round)
+          lastGame.foreach: game =>
+            val oldGameId = game.gameId
+            val winnerIndex = game.result.flatMap:
+              case GameResult.WhiteWins => Some(game.whitePlayerIndex)
+              case GameResult.BlackWins => Some(1 - game.whitePlayerIndex)
+              case GameResult.Draw      => None
 
-          winnerIndex match
-            case None =>
-              // Draw → handleDraw (RandomSelecting or Finished)
-              handleDraw(s, oldGameId)
-            case Some(winIdx) =>
-              val loserIdx = 1 - winIdx
-              val loserRemaining = s.remainingPicks(loserIdx)
-              if loserRemaining.isEmpty then
-                val allRemaining = s.unusedRemainingPicks
-                if allRemaining.isEmpty then
-                  // 양측 모두 소진 → 시리즈 종료
-                  val finished = s.copy(
-                    phase = Series.Phase.Finished,
-                    status = Series.Status.Finished,
-                    finishedAt = Some(nowInstant)
-                  )
-                  repo.update(finished).foreach(_ => Bus.pub(SeriesFinished(finished)))
+            winnerIndex match
+              case None =>
+                // Draw → handleDraw (RandomSelecting or Finished)
+                handleDraw(s, oldGameId)
+              case Some(winIdx) =>
+                val loserIdx = 1 - winIdx
+                val loserRemaining = s.remainingPicks(loserIdx)
+                if loserRemaining.isEmpty then
+                  val allRemaining = s.unusedRemainingPicks
+                  if allRemaining.isEmpty then
+                    // 양측 모두 소진 → 시리즈 종료
+                    val finished = s.copy(
+                      phase = Series.Phase.Finished,
+                      status = Series.Status.Finished,
+                      finishedAt = Some(nowInstant)
+                    )
+                    repo.update(finished).foreach(_ => Bus.pub(SeriesFinished(finished)))
+                  else
+                    // 패자 pick 소진 → 상대 pick에서 랜덤 선택
+                    startRandomGame(s, allRemaining, Some(oldGameId))
                 else
-                  // 패자 pick 소진 → 상대 pick에서 랜덤 선택
-                  startRandomGame(s, allRemaining, Some(oldGameId))
-              else
-                val selecting = s.setPhase(Series.Phase.Selecting)
-                repo.update(selecting).foreach(_ => Bus.pub(SeriesEnterSelecting(selecting, oldGameId)))
+                  val selecting = s.setPhase(Series.Phase.Selecting)
+                  repo.update(selecting).foreach(_ => Bus.pub(SeriesEnterSelecting(selecting, oldGameId)))
       case _ => ()
 
   def serverTimeoutResting(s: Series): Fu[Option[Series]] =

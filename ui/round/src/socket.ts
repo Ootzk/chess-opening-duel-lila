@@ -156,7 +156,8 @@ export function make(send: RoundSocketSend, ctrl: RoundController): RoundSocket 
           `<a class="button" href="/simul/${simul.id}">Back to ${simul.name} simul</a></div>`,
       });
     },
-    seriesResting(o: { timeLeft: number }) {
+    seriesResting(o: { timeLeft: number; finished?: boolean }) {
+      ctrl.seriesIsLastGame = o.finished ?? false;
       ctrl.initSeriesResting(o.timeLeft);
     },
     seriesNextReady() {

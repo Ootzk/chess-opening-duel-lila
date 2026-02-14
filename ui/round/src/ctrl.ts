@@ -82,6 +82,7 @@ export default class RoundController implements MoveRootCtrl {
   preventDrawOffer?: Timeout = undefined;
   // Series resting phase state
   seriesResting = false;
+  seriesIsLastGame = false;
   seriesRestTimeLeft = 0;
   seriesMyNextReady = false;
   seriesOpponentNextReady = false;
@@ -140,6 +141,7 @@ export default class RoundController implements MoveRootCtrl {
     // Initialize series resting state from page data (for page refresh)
     if (d.series?.resting) {
       this.seriesResting = true;
+      this.seriesIsLastGame = !!d.series.resting.isLastGame;
       this.seriesRestTimeLeft = d.series.resting.timeLeft;
       this.seriesMyNextReady = d.series.resting.myReady;
       this.seriesOpponentNextReady = d.series.resting.opponentReady;

@@ -247,9 +247,9 @@ object Event:
 
   // Series: Resting phase 진입 (게임 종료 후 다음 게임 전 대기)
   // only 플래그로 색상별 타겟팅 (owner=true 사용 금지: tellVersion에서 'p' 플래그가 only를 덮어씀)
-  case class SeriesResting(color: Color, timeLeft: Int) extends Event:
+  case class SeriesResting(color: Color, timeLeft: Int, finished: Boolean) extends Event:
     def typ = "seriesResting"
-    def data = Json.obj("timeLeft" -> timeLeft)
+    def data = Json.obj("timeLeft" -> timeLeft, "finished" -> finished)
     override def only = Some(color)
 
   // Series: 상대가 Next Game 클릭

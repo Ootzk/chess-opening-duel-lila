@@ -317,10 +317,10 @@ final private class RoundAsyncActor(
           chess.ByColor(color => Event.SeriesFinishedRedirect(color, seriesId)).toList
 
     // Series: Resting phase 진입 (게임 종료 후 다음 게임 전 대기)
-    case lila.game.actorApi.NotifySeriesResting(_, _, timeLeft) =>
+    case lila.game.actorApi.NotifySeriesResting(_, _, timeLeft, finished) =>
       fuccess:
         publish:
-          chess.ByColor(color => Event.SeriesResting(color, timeLeft)).toList
+          chess.ByColor(color => Event.SeriesResting(color, timeLeft, finished)).toList
 
     // Series: 상대가 Next Game 클릭
     case lila.game.actorApi.NotifySeriesNextReady(_, readyColor) =>
