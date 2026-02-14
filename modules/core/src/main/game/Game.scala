@@ -44,7 +44,7 @@ case class Game(
 ):
 
   export chess.{ position, ply, clock, sans, startedAtPly, player as turnColor, history, variant }
-  export metadata.{ tournamentId, simulId, swissId, drawOffers, source, pgnImport, hasRule }
+  export metadata.{ tournamentId, simulId, swissId, seriesId, drawOffers, source, pgnImport, hasRule }
   export players.{ white as whitePlayer, black as blackPlayer, apply as player }
 
   lazy val clockHistory = chess.clock.flatMap(loadClockHistory)
@@ -86,7 +86,8 @@ case class Game(
   export tournamentId.isDefined as isTournament
   export simulId.isDefined as isSimul
   export swissId.isDefined as isSwiss
-  def isMandatory = isTournament || isSimul || isSwiss
+  export seriesId.isDefined as isSeries
+  def isMandatory = isTournament || isSimul || isSwiss || isSeries
   def nonMandatory = !isMandatory
   def canTakebackOrAddTime = !isMandatory
 

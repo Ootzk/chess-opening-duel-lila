@@ -108,5 +108,6 @@ final class SeriesJson(
     case Series.Phase.Banning => "Ban Phase"
     case Series.Phase.RandomSelecting => "Starting..."
     case Series.Phase.Playing => "Playing"
+    case Series.Phase.Resting => "Resting"
     case Series.Phase.Selecting => "Select Opening"
     case Series.Phase.Finished => "Finished"

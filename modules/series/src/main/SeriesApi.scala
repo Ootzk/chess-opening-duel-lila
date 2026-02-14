@@ -842,13 +842,13 @@ final class SeriesApi(
             lila.game.Player.make(color, if color.white then whiteUser else blackUser)
           ,
           rated = chess.Rated.No,
-          source = lila.core.game.Source.Friend,
+          source = lila.core.game.Source.Series,
           daysPerTurn = None,
           pgnImport = None
         )
         .withId(id)
         .copy(
-          metadata = lila.core.game.newMetadata(lila.core.game.Source.Friend).copy(
+          metadata = lila.core.game.newMetadata(lila.core.game.Source.Series).copy(
             seriesId = s.id.some
           )
         )
