@@ -153,6 +153,8 @@ GET   /feed.atom                       controllers.Feed.atom
 
 # Opening Pool
 GET   /opening-pool                    controllers.Opening.pool
+POST  /opening-pool/remove/:id/:color  controllers.Opening.removeFromPool(id, color)
+POST  /opening-pool/add                controllers.Opening.addToPool
 GET   /api/opening-pool                controllers.Opening.myPool
 GET   /api/openings                    controllers.Opening.masterOpenings
 

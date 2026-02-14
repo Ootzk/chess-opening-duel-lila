@@ -16,7 +16,8 @@ case class OpeningPool(
 )
 
 object OpeningPool:
-  val poolSize = 10
+  val minPoolSize = 5
+  val maxPoolSize = 10
 
   def makeDefault(userId: UserId): OpeningPool =
     OpeningPool(

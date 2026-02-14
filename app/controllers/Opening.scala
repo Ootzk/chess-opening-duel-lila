@@ -12,13 +12,13 @@ import lila.security.UserAgentParser
 
 final class Opening(env: Env) extends LilaController(env):
 
-  private type PoolData = List[(String, String, String)]
+  private type PoolData = List[(String, String, String, String)]
 
   private def loadPoolData(using ctx: Context): Fu[PoolData] =
     ctx.me.fold(fuccess(Nil)): me =>
       env.series.poolApi
-        .getPresetsForUser(me.userId)
-        .map(_.map(p => (p.name, p.url, p.ownerColor.name)))
+        .getPresetsWithIdsForUser(me.userId)
+        .map(_.map((id, p) => (id.value, p.name, p.url, p.ownerColor.name)))
 
   def index(q: Option[String] = None) = Open:
     val searchQuery = ~q
@@ -41,10 +41,36 @@ final class Opening(env: Env) extends LilaController(env):
   def pool = Auth { ctx ?=> me ?=>
     for
       page     <- env.opening.api.index
-      userPool <- env.series.poolApi.getPresetsForUser(me.userId)
-      poolData = userPool.map(p => (p.name, p.url, p.ownerColor.name))
+      poolData <- loadPoolData
       res <- page.fold(notFound)(p => Ok.page(views.opening.ui.pool(p, poolData)))
     yield res
+  }
+
+  def removeFromPool(id: String, color: String) = AuthBody { ctx ?=> me ?=>
+    val chessColor = chess.Color.fromName(color).getOrElse(chess.White)
+    env.series.poolApi.removeFromPool(me.userId, lila.series.PoolOpeningId(id), chessColor).flatMap:
+      case false => BadRequest(jsonError("Cannot remove: minimum 5 openings"))
+      case true =>
+        loadPoolData.map: pd =>
+          Ok.snip(views.opening.ui.poolTableSnippet(pd))
+  }
+
+  def addToPool = AuthBody(parse.json) { ctx ?=> me ?=>
+    import play.api.libs.json.*
+    val body = ctx.body.body
+    (for
+      name  <- (body \ "name").asOpt[String]
+      fen   <- (body \ "fen").asOpt[String]
+      url   <- (body \ "url").asOpt[String]
+      color <- (body \ "color").asOpt[String].flatMap(chess.Color.fromName)
+    yield (name, fen, url, color)) match
+      case None => fuccess(BadRequest(jsonError("Invalid request body")))
+      case Some((name, fen, url, color)) =>
+        env.series.poolApi.addOpeningToPool(me.userId, name, chess.format.Fen.Full(fen), url, color).flatMap:
+          case false => fuccess(BadRequest(jsonError("Cannot add: pool full or duplicate")))
+          case true =>
+            loadPoolData.map: pd =>
+              Ok.snip(views.opening.ui.poolTableSnippet(pd))
   }
 
   private val ipRateLimit =
