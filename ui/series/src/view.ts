@@ -74,7 +74,7 @@ function renderRoulettePlayerBox(ctrl: SeriesPickCtrl, player: SeriesPlayer, car
               { attrs: { 'data-state': `${opening.fen},${opening.ownerColor || 'white'},` } },
               [h('cg-container', [h('cg-board')])],
             ),
-            h('div.series-pick__name', [h('span.opening-name', opening.name)]),
+            h('div.series-pick__name', [h('span.opening-name', { attrs: { title: opening.name } }, opening.name)]),
           ],
         );
       }),
@@ -118,7 +118,7 @@ function renderOpeningShowcase(
         { attrs: { 'data-state': `${opening.fen},${opening.ownerColor || 'white'},` } },
         [h('cg-container', [h('cg-board')])],
       ),
-      h('div.series-pick__name', [h('span.opening-name', opening.name)]),
+      h('div.series-pick__name', [h('span.opening-name', { attrs: { title: opening.name } }, opening.name)]),
     ]),
     h('div.series-pick__selected-text', [
       user
@@ -199,7 +199,7 @@ function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
         },
         [h('cg-container', [h('cg-board')])],
       ),
-      h('div.series-pick__name', [h('span.opening-name', preset.name)]),
+      h('div.series-pick__name', [h('span.opening-name', { attrs: { title: preset.name } }, preset.name)]),
     ],
   );
 }

@@ -49,7 +49,7 @@ export const seriesOpeningsCtrl = (series: Series, player: Player, opponent: Pla
         },
         [h('cg-container', [h('cg-board')])],
       ),
-      h('div.series-openings__name', opening.name),
+      h('div.series-openings__name', { attrs: { title: opening.name } }, opening.name),
     ]);
 
   const initBoards = (_: VNode | undefined, vnode: VNode) =>
