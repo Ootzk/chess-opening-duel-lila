@@ -34,6 +34,17 @@ export default class SeriesPickCtrl {
   randomSelectingCountdown: number = 5;
   gameId: string | null = null;
 
+  // Roulette animation state
+  roulettePhase: 'spinning' | 'result' = 'spinning';
+  rouletteHighlightIndex: number = -1;
+  rouletteCards: SeriesOpening[] = [];
+
+  // Showcase state (shared by RandomSelecting result + Selecting showcase)
+  showcasePhase: 'none' | 'selecting-showcase' = 'none';
+  showcaseOpening: SeriesOpening | null = null;
+  showcaseGameId: string | null = null;
+  showcaseCountdown: number = 5;
+
   // Finished phase state
   offeringRematch: boolean = false;
   opponentOfferingRematch: boolean = false;
@@ -522,6 +533,11 @@ export default class SeriesPickCtrl {
   /** Handle phase event - phase changed */
   handlePhase(data: { phase: number; gameId?: string }): void {
     console.log('[series] WS phase event:', data);
+    // Selecting → Playing: show showcase before redirecting
+    if (this.isSelecting && data.phase === PhaseId.Playing && data.gameId) {
+      this.showSelectingShowcase(data.gameId);
+      return;
+    }
     if (data.phase === PhaseId.Finished) {
       window.location.href = `/series/${this.seriesId}/finished`;
     } else if (data.phase === PhaseId.Playing && data.gameId) {
@@ -729,17 +745,93 @@ export default class SeriesPickCtrl {
       this.selectedOpening = this.series.openings.find(o => o.id === currentGame.openingId) ?? null;
     }
 
-    // Always redraw first to show the UI
-    this.redraw();
+    // Build roulette cards: all remaining picks from both players (including current round's opening)
+    // Use per-player ban filtering (opponent's bans only affect that player's picks)
+    const gameNum = this.series.round;
+    const povIdx = this.series.povIndex ?? 0;
+    const remainingPicks = [0, 1].flatMap(playerIdx => {
+      const playerPicks = this.series.openings.filter(o => o.owner === playerIdx && o.source === 'pick');
+      const oppBanNames = new Set(
+        this.series.openings.filter(o => o.owner === (1 - playerIdx) && o.source === 'ban').map(o => o.name),
+      );
+      return playerPicks.filter(
+        p => !oppBanNames.has(p.name) && (!p.usedInRound || p.usedInRound === gameNum),
+      );
+    });
+    this.rouletteCards = remainingPicks.sort((a, b) => {
+      // POV player's cards first, then opponent's
+      const aIsMine = a.owner === povIdx ? 0 : 1;
+      const bIsMine = b.owner === povIdx ? 0 : 1;
+      return aIsMine - bIsMine;
+    });
 
-    // If already expired, redirect after a brief delay to ensure UI is visible
+    // If already expired, redirect immediately
     if (this.randomSelectingCountdown <= 0) {
       this.randomSelectingCountdown = 0;
+      this.roulettePhase = 'result';
+      this.redraw();
       setTimeout(() => this.startGame(), 100);
       return;
     }
 
-    this.startRandomSelectingCountdown();
+    // Available time for roulette = total time - 5s countdown
+    const availableForRoulette = this.randomSelectingCountdown - 5;
+    if (availableForRoulette >= 3) {
+      this.roulettePhase = 'spinning';
+      this.redraw();
+      this.startRoulette(availableForRoulette);
+    } else {
+      // Not enough time for roulette, show result directly + countdown
+      this.roulettePhase = 'result';
+      this.redraw();
+      this.startRandomSelectingCountdown();
+    }
+  }
+
+  private startRoulette(availableSeconds: number): void {
+    const cards = this.rouletteCards;
+    if (cards.length === 0) {
+      this.roulettePhase = 'result';
+      this.redraw();
+      this.startRandomSelectingCountdown();
+      return;
+    }
+
+    const selectedIdx = cards.findIndex(c => c.id === this.selectedOpening?.id);
+    const targetIdx = selectedIdx >= 0 ? selectedIdx : 0;
+
+    // Constant speed roulette: duration scales with card count (3-8s)
+    const STEP_DELAY = 150; // ms, constant between each card transition
+    const targetDuration = Math.min(8, 2 + cards.length); // 1 card→3s, 6 cards→8s
+    const rouletteDurationMs = Math.min(targetDuration, availableSeconds) * 1000;
+    const totalStepsTarget = Math.floor(rouletteDurationMs / STEP_DELAY);
+
+    // Build sequence: full cycles + landing on target
+    const landingSteps = targetIdx + 1;
+    const cycles = Math.max(1, Math.floor((totalStepsTarget - landingSteps) / cards.length));
+    const sequence: number[] = [];
+    for (let cycle = 0; cycle < cycles; cycle++)
+      for (let i = 0; i < cards.length; i++) sequence.push(i);
+    for (let i = 0; i <= targetIdx; i++) sequence.push(i);
+
+    let step = 0;
+
+    const animate = () => {
+      if (step >= sequence.length) {
+        // Roulette done → switch to result view
+        this.roulettePhase = 'result';
+        this.randomSelectingCountdown = 5;
+        this.redraw();
+        this.startRandomSelectingCountdown();
+        return;
+      }
+      // Direct DOM manipulation for performance (no full Snabbdom redraw)
+      this.rouletteHighlightIndex = sequence[step];
+      updateRouletteHighlight(this.rouletteHighlightIndex);
+      step++;
+      setTimeout(animate, STEP_DELAY);
+    };
+    animate();
   }
 
   private startRandomSelectingCountdown(): void {
@@ -749,7 +841,7 @@ export default class SeriesPickCtrl {
         if (this.timerInterval) {
           clearInterval(this.timerInterval);
         }
-        this.randomSelectingCountdown = 0; // Prevent negative display
+        this.randomSelectingCountdown = 0;
         this.redraw();
         this.startGame();
       } else {
@@ -758,18 +850,50 @@ export default class SeriesPickCtrl {
     }, 1000);
   }
 
+  // Selecting phase showcase
+  private showSelectingShowcase(gameId: string): void {
+    this.showcaseGameId = gameId;
+    this.showcasePhase = 'selecting-showcase';
+
+    // Find the selected opening
+    const pickName = this.isMyTurnToSelect
+      ? Array.from(this.selectedSelectingPick)[0]
+      : this.opponentSelectingPick;
+    this.showcaseOpening = this.series.openings.find(o => o.name === pickName && o.source === 'pick') ?? null;
+
+    // 5-second countdown
+    this.showcaseCountdown = 5;
+    this.redraw();
+    const interval = window.setInterval(() => {
+      this.showcaseCountdown--;
+      if (this.showcaseCountdown <= 0) {
+        clearInterval(interval);
+        this.startGameWithId(gameId);
+      }
+      this.redraw();
+    }, 1000);
+  }
+
   private startGame(): void {
-    // Game is already created during confirmBans, just redirect
     const gameId = this.series.currentGame;
     if (gameId) {
-      // Determine POV color from game's whitePlayer field (ownerColor-based)
-      const currentGameData = this.series.games.find(g => g.gameId === gameId);
-      const whitePlayer = currentGameData?.whitePlayer ?? 0;
-      const povColor = this.series.povIndex === whitePlayer ? 'white' : 'black';
-      window.location.href = `/${gameId}/${povColor}`;
+      this.startGameWithId(gameId);
     } else {
-      // Fallback: WebSocket should notify us when game is ready
       console.warn('[series] No gameId yet, waiting for WebSocket event...');
     }
   }
+
+  private startGameWithId(gameId: string): void {
+    const currentGameData = this.series.games.find(g => g.gameId === gameId);
+    const whitePlayer = currentGameData?.whitePlayer ?? 0;
+    const povColor = this.series.povIndex === whitePlayer ? 'white' : 'black';
+    window.location.href = `/${gameId}/${povColor}`;
+  }
+}
+
+function updateRouletteHighlight(activeIndex: number): void {
+  const cards = document.querySelectorAll('.series-pick__roulette-card');
+  cards.forEach((card, i) => {
+    card.classList.toggle('roulette-active', i === activeIndex);
+  });
 }

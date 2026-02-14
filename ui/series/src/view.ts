@@ -5,6 +5,9 @@ import type { OpeningPreset, SeriesOpening, SeriesGame, SeriesPlayer } from './i
 import { userLink } from 'lib/view/userLink';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
+  if (ctrl.showcasePhase === 'selecting-showcase') {
+    return renderSelectingShowcase(ctrl);
+  }
   if (ctrl.isFinished) {
     return renderFinished(ctrl);
   }
@@ -20,83 +23,113 @@ export default function view(ctrl: SeriesPickCtrl): VNode {
 }
 
 function renderRandomSelecting(ctrl: SeriesPickCtrl): VNode {
-  const povIndex = ctrl.series.povIndex ?? 0;
-  const oppIndex = 1 - povIndex;
-  const myPlayer = ctrl.series.players[povIndex];
-  const oppPlayer = ctrl.series.players[oppIndex];
   const gameNum = ctrl.series.round;
 
-  // Find which opening was selected for the current round's game
-  const currentRoundGame = ctrl.series.games.find(g => g.round === gameNum);
-  const highlightedId = currentRoundGame?.openingId;
+  if (ctrl.roulettePhase === 'result' && ctrl.selectedOpening) {
+    // Result view: showcase the selected opening
+    const ownerIdx = ctrl.selectedOpening.owner;
+    const ownerPlayer = ctrl.series.players[ownerIdx];
+    return renderOpeningShowcase(ctrl.selectedOpening, ownerPlayer, ctrl.randomSelectingCountdown, gameNum);
+  }
 
-  // Include the current round's opening (getRemainingPicks excludes it via usedInRound filter)
-  const picksForDisplay = (playerIndex: number): SeriesOpening[] => {
-    const picks = ctrl.series.openings.filter(o => o.owner === playerIndex && o.source === 'pick');
-    const oppBanNames = new Set(
-      ctrl.series.openings.filter(o => o.owner === (1 - playerIndex) && o.source === 'ban').map(o => o.name),
-    );
-    return picks.filter(p => !oppBanNames.has(p.name) && (!p.usedInRound || p.usedInRound === gameNum));
-  };
-  const myPicks = picksForDisplay(povIndex);
-  const oppPicks = picksForDisplay(oppIndex);
+  // Spinning view: two player boxes (POV player first)
+  const cards = ctrl.rouletteCards;
+  const povIdx = ctrl.series.povIndex ?? 0;
+  const oppIdx = 1 - povIdx;
+  const myCards = cards.filter(c => c.owner === povIdx);
+  const oppCards = cards.filter(c => c.owner === oppIdx);
 
   return h('div.series-pick.random-selecting', [
-    h('div.series-pick__header', [
-      h('h1', `Game ${gameNum} Starting...`),
-      h('div.series-pick__countdown', String(ctrl.randomSelectingCountdown)),
-    ]),
-    h('div.series-pick__pick-boxes', [
-      renderPickBox(myPicks, myPlayer, true, highlightedId),
-      renderPickBox(oppPicks, oppPlayer, false, highlightedId),
+    h('div.series-pick__header', [h('h1', `Game ${gameNum} Starting...`)]),
+    h('div.series-pick__player-boxes', [
+      renderRoulettePlayerBox(ctrl, ctrl.series.players[povIdx], myCards),
+      renderRoulettePlayerBox(ctrl, ctrl.series.players[oppIdx], oppCards),
     ]),
   ]);
 }
 
-function renderPickBox(
-  picks: SeriesOpening[],
-  player: SeriesPlayer,
-  isMe: boolean,
-  highlightedId?: string,
-): VNode {
+function renderRoulettePlayerBox(ctrl: SeriesPickCtrl, player: SeriesPlayer, cards: SeriesOpening[]): VNode {
   const user = player.user;
-  return h('div.series-pick__pick-box', [
-    h('div.series-pick__pick-header', [
-      user
-        ? userLink({ name: user.name, title: user.title, flair: user.flair, online: true, line: false })
-        : h('span', isMe ? 'My Picks' : 'Opponent Picks'),
-    ]),
+  return h('div.series-pick__player-box', [
     h(
-      'div.series-pick__pick-openings',
-      picks.map(opening => renderRandomSelectingOpening(opening, highlightedId)),
+      'div.series-pick__player-header',
+      user
+        ? userLink({ name: user.name, title: user.title, flair: user.flair, online: player.isOnline, line: false })
+        : h('span', `Player ${player.index + 1}`),
+    ),
+    h(
+      'div.series-pick__player-cards',
+      cards.map(opening => {
+        const globalIdx = ctrl.rouletteCards.indexOf(opening);
+        const ownerColorClass = `owner-${opening.ownerColor || 'white'}`;
+        return h(
+          `div.series-pick__opening.series-pick__roulette-card.${ownerColorClass}`,
+          {
+            key: opening.id,
+            class: { 'roulette-active': globalIdx === ctrl.rouletteHighlightIndex },
+          },
+          [
+            h(
+              'div.series-pick__board.mini-board.mini-board--init.cg-wrap.is2d',
+              { attrs: { 'data-state': `${opening.fen},${opening.ownerColor || 'white'},` } },
+              [h('cg-container', [h('cg-board')])],
+            ),
+            h('div.series-pick__name', [h('span.opening-name', opening.name)]),
+          ],
+        );
+      }),
     ),
   ]);
 }
 
-function renderRandomSelectingOpening(
+function renderSelectingShowcase(ctrl: SeriesPickCtrl): VNode {
+  const gameNum = ctrl.series.round; // round = finished games + 1 (already the next game number)
+  const selectingIdx = ctrl.series.selectingPlayer ?? 0;
+  const selectingPlayer = ctrl.series.players[selectingIdx];
+
+  if (ctrl.showcaseOpening) {
+    return renderOpeningShowcase(ctrl.showcaseOpening, selectingPlayer, ctrl.showcaseCountdown, gameNum);
+  }
+
+  // Fallback: no opening data available
+  return h('div.series-pick.random-selecting', [
+    h('div.series-pick__header', [
+      h('h1', `Game ${gameNum} Starting...`),
+      h('div.series-pick__countdown', String(ctrl.showcaseCountdown)),
+    ]),
+  ]);
+}
+
+/** Shared showcase component: enlarged card + "{player}'s {opening} selected!" + countdown */
+function renderOpeningShowcase(
   opening: SeriesOpening,
-  highlightedId?: string,
+  player: SeriesPlayer,
+  countdown: number,
+  gameNum: number,
 ): VNode {
-  const isHighlighted = highlightedId === opening.id;
+  const user = player.user;
   const ownerColorClass = `owner-${opening.ownerColor || 'white'}`;
 
-  return h(
-    `div.series-pick__opening.${ownerColorClass}`,
-    {
-      class: { highlighted: isHighlighted },
-      attrs: { 'data-name': opening.name, 'data-fen': opening.fen },
-    },
-    [
+  return h('div.series-pick.random-selecting', [
+    h('div.series-pick__header', [h('h1', `Game ${gameNum} Starting...`)]),
+    h(`div.series-pick__selected-showcase.${ownerColorClass}`, [
       h(
         'div.series-pick__board.mini-board.mini-board--init.cg-wrap.is2d',
-        {
-          attrs: { 'data-state': `${opening.fen},${opening.ownerColor || 'white'},` },
-        },
+        { attrs: { 'data-state': `${opening.fen},${opening.ownerColor || 'white'},` } },
         [h('cg-container', [h('cg-board')])],
       ),
       h('div.series-pick__name', [h('span.opening-name', opening.name)]),
-    ],
-  );
+    ]),
+    h('div.series-pick__selected-text', [
+      user
+        ? userLink({ name: user.name, title: user.title, flair: user.flair, online: true, line: false })
+        : h('span', `Player ${player.index + 1}`),
+      h('span', "'s "),
+      h(`span.opening-name-highlight.${ownerColorClass}`, opening.name),
+      h('span', ' selected!'),
+    ]),
+    h('div.series-pick__countdown', String(countdown)),
+  ]);
 }
 
 function renderHeader(ctrl: SeriesPickCtrl): VNode {

@@ -222,7 +222,7 @@ object Series:
   val maxPicks = 5
   val maxBans = 2
   val phaseTimeout: Int = 30
-  val randomSelectingTimeout = 5 // seconds
+  val randomSelectingTimeout = 13 // seconds (roulette 3-8s + countdown 5s)
   val bothConfirmedDelay = 3 // seconds - delay after both players confirm before phase transition
 
   enum Status(val id: Int):

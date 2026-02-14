@@ -233,11 +233,12 @@
     font-size: 4rem;
     font-weight: bold;
     color: $c-accent;
+    text-align: center;
   }
 }
 
-// Pick boxes for RandomSelecting phase (two player boxes side by side)
-.series-pick__pick-boxes {
+// Roulette: two player boxes side by side (v1.4.0 style)
+.series-pick__player-boxes {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: calc($block-gap * 2);
@@ -247,13 +248,13 @@
   }
 }
 
-.series-pick__pick-box {
+.series-pick__player-box {
   background: $c-bg-box;
   @extend %box-radius;
   padding: $block-gap;
 }
 
-.series-pick__pick-header {
+.series-pick__player-header {
   @extend %flex-center;
   padding-bottom: $block-gap;
   border-bottom: 1px solid $c-border;
@@ -262,7 +263,7 @@
   font-weight: bold;
 }
 
-.series-pick__pick-openings {
+.series-pick__player-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: calc($block-gap / 2);
@@ -272,11 +273,78 @@
   }
 }
 
-// 선택된 오프닝 하이라이트
-.series-pick__opening.highlighted {
-  border: 3px solid #f0c000;
-  box-shadow: 0 0 15px rgba(240, 192, 0, 0.5);
-  // Note: transform: scale() breaks chessground piece positioning
+// Roulette card highlight (toggled via DOM manipulation for performance)
+.series-pick__roulette-card {
+  transition: border-color 0.05s, box-shadow 0.05s;
+
+  &.roulette-active {
+    border-color: #f0c000;
+    box-shadow: 0 0 20px rgba(240, 192, 0, 0.6);
+  }
+}
+
+// Showcase: enlarged selected opening card
+.series-pick__selected-showcase {
+  max-width: 280px;
+  margin: 1.5rem auto;
+  @extend %flex-column;
+  @extend %box-radius;
+  padding: calc($block-gap / 2);
+  animation: showcase-appear 0.5s ease-out;
+
+  &.owner-white {
+    background: hsl(60, 10%, 90%);
+
+    .opening-name {
+      color: hsl(0, 0%, 25%);
+    }
+  }
+
+  &.owner-black {
+    background: hsl(0, 0%, 22%);
+
+    .opening-name {
+      color: hsl(0, 0%, 85%);
+    }
+  }
+}
+
+@keyframes showcase-appear {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// "{player}'s {opening} selected!" text
+.series-pick__selected-text {
+  @extend %flex-center;
+  flex-wrap: wrap;
+  gap: 0.2em;
+  text-align: center;
+  font-size: 1.4em;
+  margin: 1rem 0;
+  animation: showcase-appear 0.5s ease-out 0.2s both;
+
+  .opening-name-highlight {
+    font-weight: bold;
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+
+    &.owner-white {
+      background: hsl(60, 10%, 90%);
+      color: hsl(0, 0%, 25%);
+    }
+
+    &.owner-black {
+      background: hsl(0, 0%, 22%);
+      color: hsl(0, 0%, 85%);
+    }
+  }
 }
 
 // 이미 사용된 오프닝 (흐리게)
