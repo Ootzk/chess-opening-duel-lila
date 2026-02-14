@@ -138,24 +138,38 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
                     val isFull      = poolData.size >= 10
                     val whiteInPool = poolData.exists(d => d._2 == opening.name.value && d._4 == "white")
                     val blackInPool = poolData.exists(d => d._2 == opening.name.value && d._4 == "black")
-                    val disWhite    = whiteInPool || isFull
-                    val disBlack    = blackInPool || isFull
+                    val isImbalanced = page.exploredOption.exists { exp =>
+                      exp.result.sum > 0 && Math.abs(exp.result.whitePercent - exp.result.blackPercent) >= 15
+                    }
+                    val imbalanceTitle = page.exploredOption.flatMap { exp =>
+                      Option.when(
+                        exp.result.sum > 0 && Math.abs(exp.result.whitePercent - exp.result.blackPercent) >= 15
+                      )(
+                        f"Win rate too imbalanced (White ${exp.result.whitePercent}%.0f%% / Black ${exp.result.blackPercent}%.0f%%)"
+                      )
+                    }
+                    val disWhite = whiteInPool || isFull || isImbalanced
+                    val disBlack = blackInPool || isFull || isImbalanced
                     div(cls := "opening__pool-add")(
                       button(
                         cls := s"opening__pool-add__btn opening__pool-add__btn--white${if disWhite then " disabled" else ""}",
                         disabled := disWhite.option("disabled"),
+                        imbalanceTitle.map(t => title := t),
                         st.data("opening-name") := opening.name.value,
                         st.data("opening-fen") := page.query.fen.value,
                         st.data("opening-url") := bits.openingUrl(opening).url,
-                        st.data("color") := "white"
+                        st.data("color") := "white",
+                        st.data("imbalanced") := isImbalanced.option("true")
                       )("Play as White"),
                       button(
                         cls := s"opening__pool-add__btn opening__pool-add__btn--black${if disBlack then " disabled" else ""}",
                         disabled := disBlack.option("disabled"),
+                        imbalanceTitle.map(t => title := t),
                         st.data("opening-name") := opening.name.value,
                         st.data("opening-fen") := page.query.fen.value,
                         st.data("opening-url") := bits.openingUrl(opening).url,
-                        st.data("color") := "black"
+                        st.data("color") := "black",
+                        st.data("imbalanced") := isImbalanced.option("true")
                       )("Play as Black")
                     )
                   }

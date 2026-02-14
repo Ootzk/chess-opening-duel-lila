@@ -61,6 +61,37 @@ final private class OpeningExplorer(
             logger.warn(s"Opening stats $play $config", e)
             Failure(e)
 
+  private[opening] def statsByFen(fen: chess.format.Fen.Full): Fu[Option[Stats]] =
+    ws.url(s"$explorerEndpoint/lichess")
+      .withQueryStringParameters(
+        "fen"         -> fen.value,
+        "since"       -> OpeningQuery.firstMonth,
+        "ratings"     -> OpeningConfig.default.ratings.mkString(","),
+        "speeds"      -> OpeningConfig.default.speeds.map(_.key).mkString(","),
+        "moves"       -> "0",
+        "topGames"    -> "0",
+        "recentGames" -> "0",
+        "source"      -> "opening"
+      )
+      .withRequestTimeout(requestTimeout)
+      .get()
+      .flatMap:
+        case res if res.status == 404 => fuccess(none)
+        case res if res.status != 200 =>
+          fufail(s"Couldn't reach the opening explorer: ${res.status}")
+        case res =>
+          res
+            .body[JsValue]
+            .validate[Stats]
+            .fold(
+              err => fufail(s"Couldn't parse $err"),
+              data => fuccess(data.some)
+            )
+      .recover:
+        case e: Exception =>
+          logger.warn(s"Opening statsByFen $fen", e)
+          none
+
   private[opening] def simplePopularity(opening: Opening): Fu[Option[Long]] =
     ws.url(s"$explorerEndpoint/lichess")
       .withQueryStringParameters(

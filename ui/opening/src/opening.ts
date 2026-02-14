@@ -93,29 +93,34 @@ function initPoolHandlers(): void {
 
   // Add button
   $(document).on('click', '.opening__pool-add__btn:not([disabled])', function (this: HTMLButtonElement) {
-    const { openingName, openingFen, openingUrl, color } = this.dataset;
+    const btn = this;
+    const { openingName, openingFen, openingUrl, color } = btn.dataset;
     xhrText('/opening-pool/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: openingName, fen: openingFen, url: openingUrl, color }),
-    }).then(html => {
-      const pool = $('.opening__pool');
-      if (pool.length) pool.replaceWith(html);
-      else $('.opening__search-config').before(html);
-      updateAddButtonStates();
-    });
+    }).then(
+      html => {
+        const pool = $('.opening__pool');
+        if (pool.length) pool.replaceWith(html);
+        else $('.opening__search-config').before(html);
+        updateAddButtonStates();
+      },
+      () => {
+        btn.disabled = true;
+        btn.classList.add('disabled');
+      },
+    );
   });
 }
 
 function updateAddButtonStates(): void {
-  // Collect (name, color) pairs from pool table
   const poolEntries = new Set<string>();
   let poolSize = 0;
   $('.opening__pool__row').each(function (this: HTMLTableRowElement) {
     const name = $(this).find('.opening__pool__opening a').text().trim();
-    const colorEl = $(this).find('.color-icon')[0];
-    if (name && colorEl) {
-      const color = colorEl.classList.contains('white') ? 'white' : 'black';
+    const color = this.classList.contains('opening__pool__row--white') ? 'white' : 'black';
+    if (name) {
       poolEntries.add(`${name}:${color}`);
       poolSize++;
     }
@@ -125,7 +130,8 @@ function updateAddButtonStates(): void {
     const name = this.dataset['openingName'] || '';
     const color = this.dataset['color'] || '';
     const inPool = poolEntries.has(`${name}:${color}`);
-    const dis = inPool || isFull;
+    const isImbalanced = this.dataset['imbalanced'] === 'true';
+    const dis = inPool || isFull || isImbalanced;
     this.disabled = dis;
     this.classList.toggle('disabled', dis);
   });

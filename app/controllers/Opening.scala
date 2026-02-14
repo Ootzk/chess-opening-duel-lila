@@ -66,11 +66,15 @@ final class Opening(env: Env) extends LilaController(env):
     yield (name, fen, url, color)) match
       case None => fuccess(BadRequest(jsonError("Invalid request body")))
       case Some((name, fen, url, color)) =>
-        env.series.poolApi.addOpeningToPool(me.userId, name, chess.format.Fen.Full(fen), url, color).flatMap:
-          case false => fuccess(BadRequest(jsonError("Cannot add: pool full or duplicate")))
+        val fenFull = chess.format.Fen.Full(fen)
+        env.opening.api.isWinRateBalanced(fenFull).flatMap:
+          case false => fuccess(BadRequest(jsonError("Win rate too imbalanced")))
           case true =>
-            loadPoolData.map: pd =>
-              Ok.snip(views.opening.ui.poolTableSnippet(pd))
+            env.series.poolApi.addOpeningToPool(me.userId, name, fenFull, url, color).flatMap:
+              case false => fuccess(BadRequest(jsonError("Cannot add: pool full or duplicate")))
+              case true =>
+                loadPoolData.map: pd =>
+                  Ok.snip(views.opening.ui.poolTableSnippet(pd))
   }
 
   private val ipRateLimit =

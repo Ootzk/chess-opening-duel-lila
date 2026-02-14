@@ -69,6 +69,17 @@ final class OpeningApi(
       relHistory = query.uci.nonEmpty.so(historyPercent(history, allHistory))
     yield makeOpeningPage(query, stats, withPgn, relHistory, wiki).some
 
+  private val winRateThreshold = 15f
+
+  def isWinRateBalanced(fen: chess.format.Fen.Full): Fu[Boolean] =
+    explorer.statsByFen(fen).map:
+      case None                          => true // explorer unavailable → fail open
+      case Some(stats) if stats.sum == 0 => true // no data
+      case Some(stats) =>
+        val wp = stats.white.toFloat * 100 / stats.sum
+        val bp = stats.black.toFloat * 100 / stats.sum
+        Math.abs(wp - bp) < winRateThreshold
+
   def readConfig(using RequestHeader) = configStore.read
 
   private def historyPercent(
