@@ -36,7 +36,7 @@ final class Env(
 
   lazy val poolApi: OpeningPoolApi = OpeningPoolApi(poolRepo)
 
-  lazy val api: SeriesApi = SeriesApi(repo, gameRepo, userApi, onStart, apiScheduler)
+  lazy val api: SeriesApi = SeriesApi(repo, gameRepo, userApi, onStart, poolApi, apiScheduler)
 
   // 앱 시작 시 마스터 오프닝 시드 (idempotent)
   poolApi.seedMasterOpenings()

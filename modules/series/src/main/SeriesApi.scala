@@ -16,6 +16,7 @@ final class SeriesApi(
     gameRepo: lila.core.game.GameRepo,
     userApi: lila.core.user.UserApi,
     onStart: lila.core.game.OnStart,
+    poolApi: OpeningPoolApi,
     scheduler: Scheduler
 )(using Executor, lila.core.game.IdGenerator):
 
@@ -23,6 +24,10 @@ final class SeriesApi(
 
   // Track scheduled confirm-delay tasks so they can be cancelled
   private val confirmDelaySchedules = scalalib.ConcurrentMap[SeriesId, Cancellable](64)
+
+  /** Get user's opening pool (custom or default) */
+  def userPool(userId: UserId): Fu[Vector[OpeningPreset]] =
+    poolApi.getPresetsForUser(userId).map(_.toVector)
 
   def create(
       player0: UserId,
@@ -154,28 +159,29 @@ final class SeriesApi(
             else if s.timeLeftInPhase > 0 then fuccess(None) // 아직 타임아웃 아님
             else if s.player(idx).confirmedPicks then fuccess(Some(s)) // 이미 확정됨
             else
-              // 현재 선택 + 랜덤 채우기
-              val currentPicks = selectedNames.flatMap(name => OpeningPresets.all.find(_.name == name))
-              val remaining = OpeningPresets.all.filterNot(p => currentPicks.exists(_.name == p.name))
-              val needed = Series.maxPicks - currentPicks.size
-              val randomFills = scala.util.Random.shuffle(remaining).take(needed)
-              val finalPicks = currentPicks ++ randomFills
-              val newPicks = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
+              // 현재 선택 + 랜덤 채우기 (유저별 pool 사용)
+              userPool(userId).flatMap: pool =>
+                val currentPicks = selectedNames.flatMap(name => pool.find(_.name == name))
+                val remaining = pool.filterNot(p => currentPicks.exists(_.name == p.name))
+                val needed = Series.maxPicks - currentPicks.size
+                val randomFills = scala.util.Random.shuffle(remaining).take(needed)
+                val finalPicks = currentPicks ++ randomFills
+                val newPicks = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
 
-              // Atomic: replace openings + set confirm flag
-              repo.replacePlayerOpenings(seriesId, idx, OpeningSource.Pick, newPicks).flatMap: _ =>
-                repo.setConfirmedPicks(seriesId, idx, true).flatMap: _ =>
-                  socketNotifyConfirmed(seriesId, idx, "picks")
-                  repo.byId(seriesId).flatMap:
-                    case Some(updated) =>
-                      if updated.bothPicksConfirmed then
-                        repo.setPhaseIfCurrent(seriesId, Series.Phase.Picking, Series.Phase.Banning).map: applied =>
-                          if applied then
-                            val phaseChanged = updated.setPhase(Series.Phase.Banning)
-                            Bus.pub(SeriesPhaseChanged(phaseChanged))
-                          Some(updated)
-                      else fuccess(Some(updated))
-                    case None => fuccess(None)
+                // Atomic: replace openings + set confirm flag
+                repo.replacePlayerOpenings(seriesId, idx, OpeningSource.Pick, newPicks).flatMap: _ =>
+                  repo.setConfirmedPicks(seriesId, idx, true).flatMap: _ =>
+                    socketNotifyConfirmed(seriesId, idx, "picks")
+                    repo.byId(seriesId).flatMap:
+                      case Some(updated) =>
+                        if updated.bothPicksConfirmed then
+                          repo.setPhaseIfCurrent(seriesId, Series.Phase.Picking, Series.Phase.Banning).map: applied =>
+                            if applied then
+                              val phaseChanged = updated.setPhase(Series.Phase.Banning)
+                              Bus.pub(SeriesPhaseChanged(phaseChanged))
+                            Some(updated)
+                        else fuccess(Some(updated))
+                      case None => fuccess(None)
 
   // ===== 밴 확정 =====
 
@@ -255,9 +261,10 @@ final class SeriesApi(
             else if s.player(idx).confirmedBans then fuccess(Some(s)) // 이미 확정됨
             else
               // 상대 픽에서 선택 가능한 밴 후보
-              val opponentPicks = s.picks(1 - idx).map(_.name).toSet
-              val currentBans = selectedNames.filter(opponentPicks.contains)
-                .flatMap(name => OpeningPresets.all.find(_.name == name))
+              val opponentPicks = s.picks(1 - idx)
+              val opponentPickNames = opponentPicks.map(_.name).toSet
+              val currentBans = selectedNames.filter(opponentPickNames.contains)
+                .flatMap(name => opponentPicks.find(_.name == name).map(_.toPreset))
 
               // 남은 상대 픽 중에서 랜덤 채우기
               val remaining = s.picks(1 - idx).filterNot(p => currentBans.exists(_.name == p.name))
@@ -620,19 +627,20 @@ final class SeriesApi(
         case None =>
           unconfirmedPlayers
             .foldLeft(fuccess(s)): (fuSeries, idx) =>
-              fuSeries.map: currentS =>
-                // 현재 픽 + 랜덤 채우기
-                val currentPicks = currentS.picks(idx)
-                val remaining    = OpeningPresets.all.filterNot(p => currentPicks.exists(_.name == p.name))
-                val needed       = Series.maxPicks - currentPicks.size
-                val randomFills  = scala.util.Random.shuffle(remaining).take(needed)
-                val finalPicks   = currentPicks.map(_.toPreset) ++ randomFills
+              fuSeries.flatMap: currentS =>
+                // 유저별 pool 로드 후 랜덤 채우기
+                userPool(currentS.player(idx).userId).map: pool =>
+                  val currentPicks = currentS.picks(idx)
+                  val remaining    = pool.filterNot(p => currentPicks.exists(_.name == p.name))
+                  val needed       = Series.maxPicks - currentPicks.size
+                  val randomFills  = scala.util.Random.shuffle(remaining).take(needed)
+                  val finalPicks   = currentPicks.map(_.toPreset) ++ randomFills
 
-                val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
-                val newPicks   = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
-                val withPicks  = withoutOld.addOpenings(newPicks)
-                val confirmed  = withPicks.updatePlayer(idx, _.confirmPicks)
-                confirmed
+                  val withoutOld = currentS.removeOpeningsByOwnerAndSource(idx, OpeningSource.Pick)
+                  val newPicks   = finalPicks.map(preset => SeriesOpening.makePick(preset, idx))
+                  val withPicks  = withoutOld.addOpenings(newPicks)
+                  val confirmed  = withPicks.updatePlayer(idx, _.confirmPicks)
+                  confirmed
             .flatMap: updated =>
               val final_ =
                 if updated.bothPicksConfirmed then updated.setPhase(Series.Phase.Banning)

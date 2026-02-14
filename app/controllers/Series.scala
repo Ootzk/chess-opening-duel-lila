@@ -38,20 +38,21 @@ final class Series(env: Env) extends LilaController(env):
         Redirect(routes.Series.finishedPage(id))
       else
         val povIndex = s.playerIndex(me.userId).getOrElse(0)
-        val displayOpenings: Vector[lila.series.OpeningPreset] = s.phase match
-          case lila.series.Series.Phase.Picking => OpeningPresets.all
-          case lila.series.Series.Phase.Banning =>
-            // 상대의 픽을 표시
-            s.picks(1 - povIndex).map(_.toPreset).toVector
-          case lila.series.Series.Phase.Selecting =>
-            // 양측 동일: 승자(selectingPlayer)의 remaining picks 표시
-            val selectingIdx = s.lastGameWinner.getOrElse(0)
-            s.remainingPicks(selectingIdx).map(_.toPreset).toVector
-          case _ => OpeningPresets.all
         for
+          myPool <- api.userPool(me.userId)
+          displayOpenings: Vector[lila.series.OpeningPreset] = s.phase match
+            case lila.series.Series.Phase.Picking => myPool
+            case lila.series.Series.Phase.Banning =>
+              // 상대의 픽을 표시
+              s.picks(1 - povIndex).map(_.toPreset).toVector
+            case lila.series.Series.Phase.Selecting =>
+              // 양측 동일: 승자(selectingPlayer)의 remaining picks 표시
+              val selectingIdx = s.lastGameWinner.getOrElse(0)
+              s.remainingPicks(selectingIdx).map(_.toPreset).toVector
+            case _ => myPool
           json <- env.series.jsonView(s, Some(me.userId))
           socketVersion <- env.series.version(s.id)
-          page <- Ok.page(views.series.pick(s, json, OpeningPresets.all, displayOpenings, socketVersion))
+          page <- Ok.page(views.series.pick(s, json, myPool, displayOpenings, socketVersion))
         yield page
   }
 
@@ -90,16 +91,17 @@ final class Series(env: Env) extends LilaController(env):
           case None => JsonOk(Json.obj("redirect" -> routes.Series.show(id).url))
   }
 
-  // 오프닝 프리셋 목록 조회
-  def presets = Action:
-    JsonOk(Json.obj(
-      "presets" -> OpeningPresets.all.map(op => Json.obj(
-        "name" -> op.name,
-        "fen" -> op.fen.value,
-        "url" -> op.url,
-        "ownerColor" -> op.ownerColor.name
+  // 오프닝 프리셋 목록 조회 (로그인 시 유저 pool, 비로그인 시 기본)
+  def presets = Open:
+    ctx.me.fold(fuccess(OpeningPresets.all.toList))(me => api.userPool(me.userId).map(_.toList)).map: pool =>
+      JsonOk(Json.obj(
+        "presets" -> pool.map(op => Json.obj(
+          "name" -> op.name,
+          "fen" -> op.fen.value,
+          "url" -> op.url,
+          "ownerColor" -> op.ownerColor.name
+        ))
       ))
-    ))
 
   // 픽 설정 (이름 리스트로 받아서 OpeningPreset으로 변환)
   def setPicks(id: SeriesId) = AuthBody(parse.json) { ctx ?=> me ?=>
@@ -110,10 +112,11 @@ final class Series(env: Env) extends LilaController(env):
         ctx.body.body.asOpt[JsArray].map(_.value.flatMap(_.asOpt[String]).toList) match
           case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
           case Some(names) =>
-            val picks = names.flatMap(name => OpeningPresets.all.find(_.name == name))
-            api.setPicks(id, me.userId, picks).map:
-              case Some(_) => JsonOk(Json.obj("ok" -> true, "picks" -> picks.map(_.name)))
-              case None => JsonBadRequest(jsonError("Cannot set picks in current phase"))
+            api.userPool(me.userId).flatMap: pool =>
+              val picks = names.flatMap(name => pool.find(_.name == name))
+              api.setPicks(id, me.userId, picks.toList).map:
+                case Some(_) => JsonOk(Json.obj("ok" -> true, "picks" -> picks.map(_.name)))
+                case None => JsonBadRequest(jsonError("Cannot set picks in current phase"))
   }
 
   // 밴 설정 (이름 리스트로 받아서 OpeningPreset으로 변환)
@@ -125,7 +128,10 @@ final class Series(env: Env) extends LilaController(env):
         ctx.body.body.asOpt[JsArray].map(_.value.flatMap(_.asOpt[String]).toList) match
           case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
           case Some(names) =>
-            val bans = names.flatMap(name => OpeningPresets.all.find(_.name == name))
+            // Ban phase: 상대 픽에서 선택하므로 상대 픽을 사용
+            val oppIdx = 1 - s.playerIndex(me.userId).getOrElse(0)
+            val opponentPicks = s.picks(oppIdx)
+            val bans = names.flatMap(name => opponentPicks.find(_.name == name).map(_.toPreset))
             api.setBans(id, me.userId, bans).map:
               case Some(_) => JsonOk(Json.obj("ok" -> true, "bans" -> bans.map(_.name)))
               case None => JsonBadRequest(jsonError("Cannot set bans in current phase"))
@@ -263,7 +269,9 @@ final class Series(env: Env) extends LilaController(env):
         ctx.body.body.asOpt[String] match
           case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
           case Some(name) =>
-            OpeningPresets.all.find(_.name == name) match
+            // Selecting phase: 자신의 remaining picks에서 선택
+            val myIdx = s.playerIndex(me.userId).getOrElse(0)
+            s.remainingPicks(myIdx).find(_.name == name).map(_.toPreset) match
               case None => fuccess(JsonBadRequest(jsonError("Invalid opening name")))
               case Some(opening) =>
                 api.selectNextOpening(id, me.userId, opening).map:
