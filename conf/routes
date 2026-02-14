@@ -153,6 +153,8 @@ GET   /feed.atom                       controllers.Feed.atom
 
 # Opening Pool
 GET   /opening-pool                    controllers.Opening.pool
+GET   /api/opening-pool                controllers.Opening.myPool
+GET   /api/openings                    controllers.Opening.masterOpenings
 
 # Opening
 GET   /opening                         controllers.Opening.index(q: Option[String] ?= None)

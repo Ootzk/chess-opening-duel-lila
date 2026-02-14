@@ -1,5 +1,6 @@
 package controllers
 
+import play.api.libs.json.Json
 import play.api.mvc.*
 
 import lila.app.{ *, given }
@@ -93,3 +94,26 @@ final class Opening(env: Env) extends LilaController(env):
 
   def tree = Open:
     Ok.page(views.opening.ui.tree(lila.opening.OpeningTree.compute, env.opening.api.readConfig))
+
+  // 검증용 API: 로그인 유저의 opening pool
+  def myPool = Auth { ctx ?=> me ?=>
+    env.series.poolApi.getPresetsForUser(me.userId).map: pool =>
+      JsonOk(Json.obj("pool" -> pool.map(presetToJson)))
+  }
+
+  // 검증용 API: 마스터 오프닝 전체 목록
+  def masterOpenings = Open:
+    env.series.poolApi.allMasterOpenings.map: openings =>
+      JsonOk(Json.obj("openings" -> openings.map(o => Json.obj(
+        "id"   -> o.id.value,
+        "name" -> o.name,
+        "fen"  -> o.fen.value,
+        "url"  -> o.url
+      ))))
+
+  private def presetToJson(p: lila.series.OpeningPreset) = Json.obj(
+    "name"       -> p.name,
+    "fen"        -> p.fen.value,
+    "url"        -> p.url,
+    "ownerColor" -> p.ownerColor.name
+  )

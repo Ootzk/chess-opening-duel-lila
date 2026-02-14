@@ -52,6 +52,54 @@ object BsonHandlers:
       case SelectionMethod.Timeout => BSONString("timeout") }
   )
 
+  // PoolOpeningId
+  given BSONHandler[PoolOpeningId] = stringAnyValHandler(_.value, PoolOpeningId(_))
+
+  // PoolEntry
+  given BSONDocumentHandler[PoolEntry] = new BSONDocumentHandler[PoolEntry]:
+    def readDocument(doc: BSONDocument) =
+      for
+        openingId <- doc.getAsTry[PoolOpeningId]("i")
+        colorBool = doc.getAsOpt[Boolean]("c").getOrElse(true)
+      yield PoolEntry(openingId, if colorBool then chess.Color.White else chess.Color.Black)
+
+    def writeTry(e: PoolEntry) = scala.util.Success($doc(
+      "i" -> e.openingId,
+      "c" -> (e.ownerColor == chess.Color.White)
+    ))
+
+  // PoolOpening (마스터 컬렉션)
+  given BSONDocumentHandler[PoolOpening] = new BSONDocumentHandler[PoolOpening]:
+    def readDocument(doc: BSONDocument) =
+      for
+        id <- doc.getAsTry[PoolOpeningId]("_id")
+        name <- doc.getAsTry[String]("n")
+        fen <- doc.getAsTry[String]("f")
+        url <- doc.getAsTry[String]("u")
+      yield PoolOpening(id, name, Fen.Full(fen), url)
+
+    def writeTry(o: PoolOpening) = scala.util.Success($doc(
+      "_id" -> o.id,
+      "n"   -> o.name,
+      "f"   -> o.fen.value,
+      "u"   -> o.url
+    ))
+
+  // OpeningPool (유저별 pool)
+  given BSON[OpeningPool] with
+    def reads(r: BSON.Reader) =
+      OpeningPool(
+        userId = r.get[UserId]("_id"),
+        openings = r.getO[List[PoolEntry]]("op").getOrElse(Nil),
+        updatedAt = r.get[Instant]("ua")
+      )
+
+    def writes(w: BSON.Writer, p: OpeningPool) = $doc(
+      "_id" -> p.userId,
+      "op"  -> p.openings,
+      "ua"  -> p.updatedAt
+    )
+
   // SeriesOpeningId
   given BSONHandler[SeriesOpeningId] = stringAnyValHandler(_.value, SeriesOpeningId(_))
 
