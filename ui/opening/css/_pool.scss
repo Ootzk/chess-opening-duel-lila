@@ -1,0 +1,66 @@
+.opening__pool {
+  @extend %box-neat-force;
+  margin-bottom: 2em;
+  background: $c-bg-box;
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    padding: 0.4em 0.6em;
+    font-size: 0.85em;
+    font-weight: normal;
+    color: $c-font-dimmer;
+    text-align: center;
+    border-bottom: 1px solid $c-border;
+  }
+
+  &__header-num {
+    width: 3em;
+  }
+
+  &__header-opening {
+    text-align: left !important;
+  }
+
+  &__header-color {
+    width: 5em;
+  }
+
+  &__row {
+    &:not(:last-child) {
+      border-bottom: 1px solid rgba($c-border, 0.5);
+    }
+  }
+
+  &__num {
+    text-align: center;
+    padding: 0.4em 0.6em;
+    font-weight: bold;
+    color: $c-font-dim;
+  }
+
+  &__opening {
+    text-align: left;
+    padding: 0.4em 0.6em;
+
+    a {
+      color: $c-link;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  &__color {
+    text-align: center;
+    padding: 0.4em 0.6em;
+
+    .color-icon {
+      font-size: 1.3em;
+    }
+  }
+}
