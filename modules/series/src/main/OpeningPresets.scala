@@ -5,9 +5,9 @@ import chess.format.Fen
 case class OpeningPreset(name: String, fen: Fen.Full, url: String, ownerColor: chess.Color)
 
 object OpeningPresets:
-  // 오프닝 이름을 lichess /opening URL로 변환 (공백→_, 콜론 제거)
+  // 오프닝 이름을 로컬 /opening URL로 변환 (공백→_, 콜론 제거)
   private def nameToUrl(name: String): String =
-    s"https://lichess.org/opening/${name.replace(": ", "_").replace(" ", "_")}"
+    s"/opening/${name.replace(": ", "_").replace(" ", "_")}"
 
   // 10개 오프닝 프리셋 (Opening Explorer API에서 ECO 코드 확인됨)
   val all: Vector[OpeningPreset] = Vector(

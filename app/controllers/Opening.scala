@@ -12,6 +12,14 @@ import lila.security.UserAgentParser
 
 final class Opening(env: Env) extends LilaController(env):
 
+  private type PoolData = List[(String, String, String)]
+
+  private def loadPoolData(using ctx: Context): Fu[PoolData] =
+    ctx.me.fold(fuccess(Nil)): me =>
+      env.series.poolApi
+        .getPresetsForUser(me.userId)
+        .map(_.map(p => (p.name, p.url, p.ownerColor.name)))
+
   def index(q: Option[String] = None) = Open:
     val searchQuery = ~q
     if searchQuery.nonEmpty then
@@ -20,15 +28,23 @@ final class Opening(env: Env) extends LilaController(env):
       then Ok.snip(views.opening.ui.resultsList(results))
       else Ok.page(views.opening.ui.resultsPage(searchQuery, results, env.opening.api.readConfig))
     else
-      FoundPage(env.opening.api.index): page =>
-        isGrantedOpt(_.OpeningWiki)
-          .so(env.opening.wiki.popularOpeningsWithShortWiki)
-          .map:
-            views.opening.ui.index(page, _)
+      for
+        page     <- env.opening.api.index
+        poolData <- loadPoolData
+        res <- page.fold(notFound): p =>
+          isGrantedOpt(_.OpeningWiki)
+            .so(env.opening.wiki.popularOpeningsWithShortWiki)
+            .flatMap: wikiMissing =>
+              Ok.page(views.opening.ui.index(p, wikiMissing, poolData))
+      yield res
 
-  def pool = Auth { ctx ?=> _ ?=>
-    FoundPage(env.opening.api.index): page =>
-      views.opening.ui.pool(page)
+  def pool = Auth { ctx ?=> me ?=>
+    for
+      page     <- env.opening.api.index
+      userPool <- env.series.poolApi.getPresetsForUser(me.userId)
+      poolData = userPool.map(p => (p.name, p.url, p.ownerColor.name))
+      res <- page.fold(notFound)(p => Ok.page(views.opening.ui.pool(p, poolData)))
+    yield res
   }
 
   private val ipRateLimit =
@@ -58,10 +74,12 @@ final class Opening(env: Env) extends LilaController(env):
                         s"${routes.Opening.byKeyAndMoves(query.key, page.query.pgnUnderscored)}?r=1"
                     else
                       Ok.async:
-                        page.query.exactOpening.so(env.puzzle.opening.getClosestTo(_)).map { puzzle =>
+                        for
+                          puzzle   <- page.query.exactOpening.so(env.puzzle.opening.getClosestTo(_))
+                          poolData <- loadPoolData
+                        yield
                           val puzzleKey = puzzle.map(_.fold(_.family.key.value, _.opening.key.value))
-                          views.opening.ui.show(page, puzzleKey)
-                        }
+                          views.opening.ui.show(page, puzzleKey, poolData)
 
   def config(thenTo: String) = OpenBody:
     NoCrawlers:
@@ -93,7 +111,8 @@ final class Opening(env: Env) extends LilaController(env):
   }
 
   def tree = Open:
-    Ok.page(views.opening.ui.tree(lila.opening.OpeningTree.compute, env.opening.api.readConfig))
+    loadPoolData.flatMap: poolData =>
+      Ok.page(views.opening.ui.tree(lila.opening.OpeningTree.compute, env.opening.api.readConfig, poolData))
 
   // 검증용 API: 로그인 유저의 opening pool
   def myPool = Auth { ctx ?=> me ?=>

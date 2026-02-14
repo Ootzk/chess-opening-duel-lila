@@ -10,7 +10,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
   import helpers.{ *, given }
   import bits.*
 
-  def index(page: OpeningPage, wikiMissing: List[Opening])(using ctx: Context) =
+  def index(page: OpeningPage, wikiMissing: List[Opening], poolData: List[(String, String, String)] = Nil)(using ctx: Context) =
     openingPage(trans.site.opening.txt(), page.some)
       .graph(
         OpenGraph(
@@ -22,6 +22,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
         )
       ):
         main(cls := "page box box-pad opening opening--index")(
+          poolTable(poolData),
           searchAndConfig(page.query.config, "", ""),
           resultsList(Nil),
           boxTop(
@@ -35,11 +36,9 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
           Granter.opt(_.OpeningWiki).option(showMissing(wikiMissing))
         )
 
-  def pool(page: OpeningPage)(using ctx: Context) =
+  def pool(page: OpeningPage, userPool: List[(String, String, String)])(using ctx: Context) =
     openingPage("Manage your opening pools", page.some):
       main(cls := "page box box-pad opening opening--index")(
-        searchAndConfig(page.query.config, "", ""),
-        resultsList(Nil),
         boxTop(
           h1("Manage your opening pools"),
           div(cls := "box__top__actions")(
@@ -47,12 +46,16 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
             a(href := s"${routes.UserAnalysis.index}#explorer")("Explorer")
           )
         ),
+        poolTable(userPool),
+        searchAndConfig(page.query.config, "", ""),
+        resultsList(Nil),
         whatsNext(page) | p(cls := "opening__error")("Couldn't fetch the next moves, try again later.")
       )
 
-  def tree(root: OpeningTree, config: OpeningConfig)(using Context) =
+  def tree(root: OpeningTree, config: OpeningConfig, poolData: List[(String, String, String)] = Nil)(using Context) =
     openingPage(trans.site.opening.txt(), none):
       main(cls := "page box box-pad opening opening--tree")(
+        poolTable(poolData),
         searchAndConfig(config, "", "tree"),
         resultsList(Nil),
         boxTop(
@@ -67,7 +70,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
         )
       )
 
-  def show(page: OpeningPage, puzzleKey: Option[String])(using ctx: Context) =
+  def show(page: OpeningPage, puzzleKey: Option[String], poolData: List[(String, String, String)] = Nil)(using ctx: Context) =
     openingPage(s"${trans.site.opening.txt()} • ${page.name}", page.some)
       .graph(
         OpenGraph(
@@ -80,6 +83,7 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
       )
       .csp(_.withExternalAnalysisApis):
         main(cls := "page box box-pad opening")(
+          poolTable(poolData),
           searchAndConfig(page.query.config, "", page.query.query.key),
           resultsList(Nil),
           h1(cls := "opening__title")(
@@ -215,6 +219,31 @@ final class OpeningUi(helpers: Helpers, bits: OpeningBits, wiki: WikiUi):
       )
       if fold then details(content) else content
     }
+
+  private def poolTable(userPool: List[(String, String, String)]) =
+    if userPool.isEmpty then emptyFrag
+    else div(cls := "opening__pool")(
+      table(cls := "opening__pool__table")(
+        thead(
+          tr(
+            th(cls := "opening__pool__header-num")("#"),
+            th(cls := "opening__pool__header-opening")("Opening"),
+            th(cls := "opening__pool__header-color")("Color")
+          )
+        ),
+        tbody(
+          userPool.zipWithIndex.map: (entry, idx) =>
+            val (name, url, colorName) = entry
+            tr(cls := "opening__pool__row")(
+              td(cls := "opening__pool__num")(idx + 1),
+              td(cls := "opening__pool__opening")(a(href := url)(name)),
+              td(cls := "opening__pool__color")(
+                span(cls := s"color-icon is $colorName")
+              )
+            )
+        )
+      )
+    )
 
   private def exampleGames(page: OpeningPage) =
     div(cls := "opening__games")(page.exploredOption.so(_.games).map { game =>
