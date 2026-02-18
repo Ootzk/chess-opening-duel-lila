@@ -2,6 +2,7 @@ import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type SeriesPickCtrl from './ctrl';
 import type { OpeningPreset, SeriesOpening, SeriesGame, SeriesPlayer } from './interfaces';
+import { openingKey } from './interfaces';
 import { userLink } from 'lib/view/userLink';
 
 export default function view(ctrl: SeriesPickCtrl): VNode {
@@ -159,8 +160,9 @@ function renderGrid(ctrl: SeriesPickCtrl): VNode {
 }
 
 function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
-  const isSelected = ctrl.isSelected(preset.name);
-  const canSelect = ctrl.canSelect(preset.name);
+  const key = openingKey(preset);
+  const isSelected = ctrl.isSelected(key);
+  const canSelect = ctrl.canSelect(key);
   const isOpponentSelecting = ctrl.isSelecting && !ctrl.isMyTurnToSelect && preset.name === ctrl.opponentSelectingPick;
   const isDisabled = ctrl.isSelecting
     ? !ctrl.isMyTurnToSelect || ctrl.myConfirmed  // Loser can't click; confirmed winner can't click
@@ -170,6 +172,7 @@ function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
   return h(
     `div.series-pick__opening${ownerColorClass ? '.' + ownerColorClass : ''}`,
     {
+      key,
       class: {
         selected: isSelected,
         disabled: isDisabled,
@@ -184,7 +187,7 @@ function renderOpening(ctrl: SeriesPickCtrl, preset: OpeningPreset): VNode {
       on: {
         click: () => {
           if (!isDisabled || isSelected) {
-            ctrl.toggleSelection(preset.name);
+            ctrl.toggleSelection(key);
           }
         },
       },

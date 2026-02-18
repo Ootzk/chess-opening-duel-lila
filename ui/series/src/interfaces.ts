@@ -90,6 +90,17 @@ export const Status = {
   Aborted: 40,
 } as const;
 
+// Composite key: "name::ownerColor" for unique identification of openings
+// (same opening name can appear with different ownerColors in a user's pool)
+export function openingKey(o: { name: string; ownerColor?: Color }): string {
+  return `${o.name}::${o.ownerColor || 'white'}`;
+}
+
+export function keyToName(key: string): string {
+  const idx = key.lastIndexOf('::');
+  return idx >= 0 ? key.substring(0, idx) : key;
+}
+
 // Helper functions
 export function getMyPicks(data: SeriesData): SeriesOpening[] {
   if (data.povIndex === undefined) return [];
