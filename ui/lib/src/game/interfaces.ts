@@ -29,6 +29,7 @@ export interface Series {
     timeLeft: number;
     myReady: boolean;
     opponentReady: boolean;
+    opponentOnline: boolean;
     isLastGame: boolean;
   };
   players: [SeriesPlayerInfo, SeriesPlayerInfo];

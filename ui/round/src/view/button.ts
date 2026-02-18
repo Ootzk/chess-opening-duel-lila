@@ -256,15 +256,22 @@ export function moretime(ctrl: RoundController): LooseVNode {
 export function seriesRestFollowUp(ctrl: RoundController): VNode {
   const hurry = ctrl.seriesRestTimeLeft <= 10;
   const isLastGame = ctrl.seriesIsLastGame;
+  const opponentGone = !ctrl.seriesOpponentOnline;
   const timerText = ctrl.seriesBothNextReady
     ? isLastGame
       ? `Showing results in ${ctrl.seriesNextCountdown}...`
       : `Game starting in ${ctrl.seriesNextCountdown}...`
-    : isLastGame
-      ? `Results in ${ctrl.seriesRestTimeLeft}`
-      : `Next game starts in ${ctrl.seriesRestTimeLeft}`;
+    : opponentGone
+      ? `Opponent left \u00b7 Forfeit in ${ctrl.seriesRestTimeLeft}`
+      : isLastGame
+        ? `Results in ${ctrl.seriesRestTimeLeft}`
+        : `Next game starts in ${ctrl.seriesRestTimeLeft}`;
   return hl('div.follow-up.series-rest', [
-    hl('div.series-rest__timer', { class: { hurry: hurry && !ctrl.seriesBothNextReady } }, timerText),
+    hl(
+      'div.series-rest__timer',
+      { class: { hurry: hurry && !ctrl.seriesBothNextReady && !opponentGone, gone: opponentGone && !ctrl.seriesBothNextReady } },
+      timerText,
+    ),
     hl('div.series-rest__actions', [
       ctrl.seriesMyNextReady
         ? hl(
@@ -279,8 +286,12 @@ export function seriesRestFollowUp(ctrl: RoundController): VNode {
           ),
       hl(
         'div.series-rest__opponent-status',
-        { class: { ready: ctrl.seriesOpponentNextReady } },
-        ctrl.seriesOpponentNextReady ? 'Opponent is Ready!' : 'Waiting for opponent...',
+        { class: { ready: ctrl.seriesOpponentNextReady && !opponentGone, gone: opponentGone } },
+        opponentGone
+          ? 'Opponent disconnected'
+          : ctrl.seriesOpponentNextReady
+            ? 'Opponent is Ready!'
+            : 'Waiting for opponent...',
       ),
     ]),
   ]);

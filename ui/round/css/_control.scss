@@ -171,6 +171,10 @@
       &.hurry {
         color: $c-error;
       }
+
+      &.gone {
+        color: $c-bad;
+      }
     }
 
     &__actions {
@@ -194,6 +198,12 @@
       &.ready {
         opacity: 1;
         color: $c-good;
+        font-weight: bold;
+      }
+
+      &.gone {
+        opacity: 1;
+        color: $c-bad;
         font-weight: bold;
       }
     }

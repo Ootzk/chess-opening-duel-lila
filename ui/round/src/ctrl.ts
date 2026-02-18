@@ -86,6 +86,7 @@ export default class RoundController implements MoveRootCtrl {
   seriesRestTimeLeft = 0;
   seriesMyNextReady = false;
   seriesOpponentNextReady = false;
+  seriesOpponentOnline = true;
   seriesBothNextReady = false;
   seriesNextCountdown = 0;
   private seriesRestInterval?: number;
@@ -146,6 +147,7 @@ export default class RoundController implements MoveRootCtrl {
       this.seriesRestTimeLeft = d.series.resting.timeLeft;
       this.seriesMyNextReady = d.series.resting.myReady;
       this.seriesOpponentNextReady = d.series.resting.opponentReady;
+      this.seriesOpponentOnline = d.series.resting.opponentOnline ?? true;
       // Start the countdown timer
       this.seriesRestInterval = setInterval(() => {
         if (this.seriesRestTimeLeft > 0) {
@@ -153,8 +155,25 @@ export default class RoundController implements MoveRootCtrl {
           this.redraw();
         } else {
           clearInterval(this.seriesRestInterval);
+          clearInterval(this.seriesRestPingInterval);
         }
       }, 1000) as unknown as number;
+      // Start ping poll for DC detection + lastSeenAt refresh
+      const seriesId = d.series.id;
+      this.seriesRestPingInterval = setInterval(() => {
+        fetch(`/api/series/${seriesId}`, { headers: { Accept: 'application/json' } })
+          .then(r => r.json())
+          .then((data: any) => {
+            if (data.povIndex !== undefined && data.players) {
+              const oppOnline = data.players[1 - data.povIndex]?.isOnline ?? true;
+              if (this.seriesOpponentOnline !== oppOnline) {
+                this.seriesOpponentOnline = oppOnline;
+                this.redraw();
+              }
+            }
+          })
+          .catch(() => {});
+      }, 3000) as unknown as number;
     }
 
     this.menu = toggle(false, redraw);
@@ -799,12 +818,24 @@ export default class RoundController implements MoveRootCtrl {
         clearInterval(this.seriesRestPingInterval);
       }
     }, 1000) as unknown as number;
-    // Resting 중 series lastSeenAt 갱신 (DC 감지용)
+    // Resting 중 series lastSeenAt 갱신 + 상대 DC 감지
     clearInterval(this.seriesRestPingInterval);
+    this.seriesOpponentOnline = true;
     const seriesId = this.data.series?.id;
     if (seriesId) {
       this.seriesRestPingInterval = setInterval(() => {
-        fetch(`/api/series/${seriesId}`, { headers: { Accept: 'application/json' } });
+        fetch(`/api/series/${seriesId}`, { headers: { Accept: 'application/json' } })
+          .then(r => r.json())
+          .then((data: any) => {
+            if (data.povIndex !== undefined && data.players) {
+              const oppOnline = data.players[1 - data.povIndex]?.isOnline ?? true;
+              if (this.seriesOpponentOnline !== oppOnline) {
+                this.seriesOpponentOnline = oppOnline;
+                this.redraw();
+              }
+            }
+          })
+          .catch(() => {});
       }, 3000) as unknown as number;
     }
     this.redraw();

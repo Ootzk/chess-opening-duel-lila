@@ -439,6 +439,8 @@ final class SeriesApi(
       val p0dc = s.player(0).isDisconnected
       val p1dc = s.player(1).isDisconnected
       if p0dc && p1dc then abortSeries(s)         // 양측 DC → Abort
+      else if p0dc then forfeitSeriesByIndex(s, loserIdx = 0) // 1명 DC → 몰수승
+      else if p1dc then forfeitSeriesByIndex(s, loserIdx = 1)
       else
         transitionFromResting(s.id)
         fuccess(Some(s))
@@ -687,6 +689,17 @@ final class SeriesApi(
               repo.update(forfeited).map: _ =>
                 Bus.pub(SeriesForfeited(forfeited))
                 Some(forfeited)
+
+  private def forfeitSeriesByIndex(s: Series, loserIdx: Int): Fu[Option[Series]] =
+    val forfeited = s.copy(
+      forfeitBy = Some(loserIdx),
+      phase = Series.Phase.Finished,
+      status = Series.Status.Finished,
+      finishedAt = Some(nowInstant)
+    )
+    repo.update(forfeited).map: _ =>
+      Bus.pub(SeriesForfeited(forfeited))
+      Some(forfeited)
 
   private def abortSeries(s: Series): Fu[Option[Series]] =
     val aborted = s.copy(

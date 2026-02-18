@@ -78,12 +78,16 @@ final class Env(
   Bus.sub[SeriesForfeited]:
     case SeriesForfeited(s) =>
       socket.reload(s.id)
+      // currentGame: 진행 중인 게임 (Playing 중 forfeit)
+      // lastFinishedGame: 완료된 게임 (Resting 중 DC forfeit — currentGame=None)
+      val gameForRedirect = s.currentGame.orElse(s.lastFinishedGame)
       s.currentGame.foreach: sg =>
         s.forfeitBy.foreach: loserIdx =>
           val loserColor =
             if sg.whitePlayerIndex == loserIdx then chess.Color.White
             else chess.Color.Black
           Bus.pub(lila.game.actorApi.NotifySeriesForfeited(sg.gameId, loserColor))
+      gameForRedirect.foreach: sg =>
         Bus.pub(lila.game.actorApi.NotifySeriesFinished(s.id, sg.gameId))
 
   // Subscribe to game finish events

@@ -339,6 +339,7 @@ final private[api] class RoundApi(
             Json.obj("timeLeft" -> s.timeLeftInPhase, "isLastGame" -> isLastGame)
               .add("myReady" -> myIdx.map(i => s.player(i).confirmedNext))
               .add("opponentReady" -> myIdx.map(i => s.player(1 - i).confirmedNext))
+              .add("opponentOnline" -> myIdx.map(i => s.player(1 - i).isOnline))
           )
     )
 
