@@ -97,6 +97,33 @@ object bits:
       p(trans.site.youCantStartNewGame())
     )
 
+  def currentSeriesInfo(current: lila.app.mashup.Preload.CurrentSeries)(using Context) =
+    nopeInfo(
+      h1(trans.site.hangOn()),
+      p("A series is in progress with ", strong(current.opponent), "."),
+      br,
+      br,
+      a(
+        cls := "text button button-fat",
+        dataIcon := Icon.Swords,
+        href := routes.Series.pickPage(current.seriesId)
+      )(
+        "Return to Series"
+      ),
+      br,
+      br,
+      "or",
+      br,
+      br,
+      postForm(action := routes.Series.forfeit(current.seriesId))(
+        button(cls := "text button button-red", dataIcon := Icon.X)(
+          "Forfeit the Series"
+        )
+      ),
+      br,
+      p(trans.site.youCantStartNewGame())
+    )
+
   def nopeInfo(content: Modifier*) =
     frag(
       div(cls := "lobby__app"),

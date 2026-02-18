@@ -40,7 +40,7 @@ object home:
         main(
           cls := List(
             "lobby" -> true,
-            "lobby-nope" -> (playban.isDefined || currentGame.isDefined || homepage.hasUnreadLichessMessage)
+            "lobby-nope" -> (playban.isDefined || currentGame.isDefined || currentSeries.isDefined || homepage.hasUnreadLichessMessage)
           )
         )(
           div(cls := "lobby__table")(
@@ -58,6 +58,8 @@ object home:
           ),
           currentGame
             .map(bits.currentGameInfo)
+            .orElse:
+              currentSeries.map(bits.currentSeriesInfo)
             .orElse:
               hasUnreadLichessMessage.option(bits.showUnreadLichessMessage)
             .orElse:

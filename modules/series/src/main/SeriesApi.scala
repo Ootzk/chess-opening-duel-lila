@@ -44,6 +44,8 @@ final class SeriesApi(
 
   def byGameId(gameId: GameId): Fu[Option[Series]] = repo.byGameId(gameId)
 
+  def activeByUser(userId: UserId): Fu[Option[Series]] = repo.activeByUser(userId)
+
   // ===== Player Online Status =====
 
   def updateLastSeen(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =

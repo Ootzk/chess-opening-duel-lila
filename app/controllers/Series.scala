@@ -25,14 +25,15 @@ final class Series(env: Env) extends LilaController(env):
       if !isPlayer(s, me.userId) then Forbidden("Not a player of this series")
       else if s.phase == lila.series.Series.Phase.RandomSelecting then
         Redirect(routes.Series.randomSelectingPage(id))
-      else if s.phase == lila.series.Series.Phase.Playing then
-        // Playing 중이면 현재 게임으로 리다이렉트
-        s.currentGameId match
-          case Some(gameId) =>
+      else if s.phase == lila.series.Series.Phase.Playing || s.phase == lila.series.Series.Phase.Resting then
+        // Playing/Resting 중이면 현재/마지막 게임으로 리다이렉트
+        val gameOpt = s.currentGame.orElse(s.lastFinishedGame)
+        gameOpt match
+          case Some(game) =>
             val povIndex = s.playerIndex(me.userId).getOrElse(0)
-            val isWhite = s.currentGame.exists(_.whitePlayerIndex == povIndex)
+            val isWhite  = game.whitePlayerIndex == povIndex
             val povColor = if isWhite then Color.white else Color.black
-            Redirect(s"/${gameId}/${povColor.name}")
+            Redirect(s"/${game.gameId}/${povColor.name}")
           case None => Redirect(routes.Series.show(id))
       else if s.isFinished then
         Redirect(routes.Series.finishedPage(id))

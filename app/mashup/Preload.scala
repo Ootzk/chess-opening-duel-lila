@@ -13,6 +13,7 @@ import lila.swiss.Swiss
 import lila.timeline.Entry
 import lila.tournament.Tournament
 import lila.ublog.UblogPost
+import lila.core.id.SeriesId
 import lila.user.{ LightUserApi, Me, User }
 
 final class Preload(
@@ -32,7 +33,8 @@ final class Preload(
     unreadCount: lila.msg.MsgUnreadCount,
     relayHome: lila.relay.RelayHomeApi,
     notifyApi: lila.notify.NotifyApi,
-    clasApi: lila.clas.ClasApi
+    clasApi: lila.clas.ClasApi,
+    seriesApi: lila.series.SeriesApi
 )(using Executor):
 
   import Preload.*
@@ -83,8 +85,9 @@ final class Preload(
           .ifTrue(nbNotifications > 0)
           .filterNot(liveStreamApi.isStreaming)
           .so(unreadCount.hasLichessMsg)
-    (currentGame, _) <- ctx.me
+    ((currentGame, currentSeries), _) <- ctx.me
       .soUse(currentGameMyTurn(povs, lightUserApi.sync))
+      .zip(ctx.me.soUse(currentSeriesForUser))
       .mon(_.lobby.segment("currentGame"))
       .zip:
         lightUserApi
@@ -104,6 +107,7 @@ final class Preload(
     streams.excludeUsers(events.flatMap(_.hostedBy)),
     playban,
     currentGame,
+    currentSeries,
     simulIsFeaturable,
     blindGames,
     getLastUpdates(),
@@ -120,6 +124,14 @@ final class Preload(
         _.map { roundProxy.pov(_, me) }.parallel.dmap(_.flatten)
       .flatMap:
         currentGameMyTurn(_, lightUserApi.sync)
+
+  private def currentSeriesForUser(using me: Me): Fu[Option[CurrentSeries]] =
+    seriesApi.activeByUser(me.userId).map(_.map { s =>
+      val idx       = s.playerIndex(me.userId).getOrElse(0)
+      val oppPlayer = s.opponent(idx)
+      val oppName   = lightUserApi.sync(oppPlayer.userId).fold(oppPlayer.userId.value)(_.name.value)
+      CurrentSeries(s.id, oppName, s.phase)
+    })
 
   private def currentGameMyTurn(povs: List[Pov], lightUser: lila.core.LightUser.GetterSync)(using
       me: Me
@@ -146,6 +158,7 @@ object Preload:
       streams: LiveStreams.WithTitles,
       playban: Option[TempBan],
       currentGame: Option[Preload.CurrentGame],
+      currentSeries: Option[Preload.CurrentSeries],
       isFeaturable: Simul => Boolean,
       blindGames: List[Pov],
       lastUpdates: List[lila.feed.Feed.Update],
@@ -156,3 +169,4 @@ object Preload:
   )
 
   case class CurrentGame(pov: Pov, opponent: String)
+  case class CurrentSeries(seriesId: SeriesId, opponent: String, phase: lila.series.Series.Phase)

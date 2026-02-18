@@ -149,7 +149,19 @@ final class Round(
         isBlockedByPlayer(pov.game).flatMap:
           if _ then notFound
           else
-            negotiateApi(
+            // Series Resting: 플레이어가 끝난 게임 페이지에 재접속하면 resting overlay가 보이도록 renderPlayer 사용
+            def isSeriesResting: Fu[Boolean] =
+              pov.game.metadata.seriesId.fold(fuccess(false)): seriesId =>
+                env.series.api.byId(seriesId).map:
+                  case Some(s) =>
+                    s.phase == lila.series.Series.Phase.Resting &&
+                    ctx.me.exists(me => s.playerIndex(me.userId).isDefined)
+                  case _ => false
+            if pov.game.replayable && pov.game.metadata.seriesId.isDefined then
+              isSeriesResting.flatMap:
+                if _ then renderPlayer(pov)
+                else analyseC.replay(pov, userTv = userTv)
+            else negotiateApi(
               html =
                 if pov.game.replayable then analyseC.replay(pov, userTv = userTv)
                 else if HTTPRequest.isHuman(ctx.req) then

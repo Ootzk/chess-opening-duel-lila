@@ -75,6 +75,21 @@ final class SeriesRepo(val coll: Coll)(using Executor):
         ).void
       else funit
 
+  /** 특정 유저의 활성 시리즈 조회 (Playing 페이즈 제외 - currentGame이 처리) */
+  def activeByUser(userId: UserId): Fu[Option[Series]] =
+    coll
+      .find(
+        $or(
+          $doc("p0.u" -> userId),
+          $doc("p1.u" -> userId)
+        ) ++ $doc(
+          "st".$in(List(Series.Status.Created.id, Series.Status.Started.id)),
+          "ph".$ne(Series.Phase.Playing.id)
+        )
+      )
+      .sort($doc("ca" -> -1))
+      .one[Series]
+
   // 두 플레이어로 가장 최근 생성된 series 찾기 (밴픽 리다이렉트용)
   def byPlayers(user1: UserId, user2: UserId): Fu[Option[Series]] =
     coll
