@@ -323,8 +323,7 @@ final class SeriesApi(
   def finishGame(
       seriesId: SeriesId,
       gameId: GameId,
-      winnerId: Option[UserId],
-      isDisconnectForfeit: Boolean = false
+      winnerId: Option[UserId]
   ): Funit =
     repo.byId(seriesId).flatMap:
       case None => funit
@@ -337,28 +336,12 @@ final class SeriesApi(
             val result = GameResult.fromWinnerIndex(winnerIndex, seriesGame.whitePlayerIndex)
             val updated = s.finishGame(gameId, result)
 
-            if updated.isFinished then
-              // 리캡을 위해 Resting phase 진입 (status는 finishGame 모델에서 이미 Finished로 설정됨)
-              val resting = updated.updatePlayers(_.clearNext).setPhase(Series.Phase.Resting)
-              repo.update(resting).map: _ =>
-                Bus.pub(SeriesPhaseChanged(resting))
-                Bus.pub(SeriesEnterResting(resting, gameId))
-            else if isDisconnectForfeit && winnerIndex.isDefined then
-              // 상대 disconnect로 게임 종료 → 시리즈 전체 forfeit
-              val loserIdx = 1 - winnerIndex.get
-              val forfeited = updated.copy(
-                forfeitBy = Some(loserIdx),
-                phase = Series.Phase.Finished,
-                status = Series.Status.Finished,
-                finishedAt = Some(nowInstant)
-              )
-              repo.update(forfeited).map(_ => Bus.pub(SeriesFinished(forfeited)))
-            else
-              // 시리즈 미종료 + 정상 게임 종료 → Resting phase 진입
-              val resting = updated.updatePlayers(_.clearNext).setPhase(Series.Phase.Resting)
-              repo.update(resting).map: _ =>
-                Bus.pub(SeriesPhaseChanged(resting))
-                Bus.pub(SeriesEnterResting(resting, gameId))
+            // 모든 게임 종료 → Resting phase 진입 (DC 포함)
+            // Playing 중 series WS에 미연결이므로 lastSeenAt 리셋 필수
+            val resting = updated.updatePlayers(p => p.clearNext.updateLastSeen).setPhase(Series.Phase.Resting)
+            repo.update(resting).map: _ =>
+              Bus.pub(SeriesPhaseChanged(resting))
+              Bus.pub(SeriesEnterResting(resting, gameId))
 
   // ===== Resting Phase: Next Game 확인 =====
 
@@ -453,8 +436,12 @@ final class SeriesApi(
   def serverTimeoutResting(s: Series): Fu[Option[Series]] =
     if s.bothNextConfirmed then fuccess(Some(s)) // 3초 스케줄이 처리 중
     else
-      transitionFromResting(s.id)
-      fuccess(Some(s))
+      val p0dc = s.player(0).isDisconnected
+      val p1dc = s.player(1).isDisconnected
+      if p0dc && p1dc then abortSeries(s)         // 양측 DC → Abort
+      else
+        transitionFromResting(s.id)
+        fuccess(Some(s))
 
   /** Helper: get chess.Color for a player index based on the last game */
   private def gameColor(s: Series, playerIndex: Int): chess.Color =
@@ -711,18 +698,6 @@ final class SeriesApi(
       Bus.pub(SeriesAborted(aborted))
       Some(aborted)
 
-  /** Forfeit by player index (for server-side disconnect timeout) */
-  private def forfeitByIndex(s: Series, loserIdx: Int): Fu[Option[Series]] =
-    val forfeited = s.copy(
-      forfeitBy = Some(loserIdx),
-      phase = Series.Phase.Finished,
-      status = Series.Status.Finished,
-      finishedAt = Some(nowInstant)
-    )
-    repo.update(forfeited).map: _ =>
-      Bus.pub(SeriesForfeited(forfeited))
-      Some(forfeited)
-
   private def serverTimeoutSelecting(s: Series): Fu[Option[Series]] =
     s.lastGameLoser match
       case None => fuccess(Some(s))
@@ -733,11 +708,7 @@ final class SeriesApi(
           val p0dc = s.player(0).isDisconnected
           val p1dc = s.player(1).isDisconnected
           if p0dc && p1dc then abortSeries(s)           // 양측 DC → Abort
-          else if p0dc || p1dc then                       // 한쪽 DC → DC한 쪽 패배
-            val dcIdx = if p0dc then 0 else 1
-            forfeitByIndex(s, dcIdx)
-          else                                            // 양측 online → 랜덤 선택
-            handleSelectingTimeout(s.id).map(_ => Some(s))
+          else handleSelectingTimeout(s.id).map(_ => Some(s)) // 랜덤 선택 (DC 여부 무관)
 
   // ===== 타임아웃 처리 =====
 
@@ -766,6 +737,9 @@ final class SeriesApi(
     val selected = scala.util.Random.shuffle(pool).head
     val round = s.currentRound
     val withOpening = s.markOpeningUsed(selected.id, round, method)
+    // Selecting timeout: 선택된 오프닝을 WS로 브로드캐스트 (showcase 표시용)
+    if s.phase == Series.Phase.Selecting then
+      socket.foreach(_.notifySelectingPick(s.id, Some(selected.name)))
 
     for
       game <- createGame(withOpening, round, selected)

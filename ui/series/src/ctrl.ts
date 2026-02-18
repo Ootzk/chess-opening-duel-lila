@@ -868,6 +868,11 @@ export default class SeriesPickCtrl {
         const name = keyToName(pickKey);
         this.showcaseOpening = this.series.openings.find(o => o.name === name && o.source === 'pick') ?? null;
       }
+      // Fallback: timeout 시 서버가 랜덤 선택한 오프닝 (selectingPick WS로 수신)
+      if (!this.showcaseOpening && this.opponentSelectingPick) {
+        this.showcaseOpening =
+          this.series.openings.find(o => o.name === this.opponentSelectingPick && o.source === 'pick') ?? null;
+      }
     } else {
       const pickName = this.opponentSelectingPick;
       this.showcaseOpening = this.series.openings.find(o => o.name === pickName && o.source === 'pick') ?? null;

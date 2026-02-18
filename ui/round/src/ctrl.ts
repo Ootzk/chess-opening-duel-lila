@@ -90,6 +90,7 @@ export default class RoundController implements MoveRootCtrl {
   seriesNextCountdown = 0;
   private seriesRestInterval?: number;
   private seriesCountdownInterval?: number;
+  private seriesRestPingInterval?: number;
   // will be replaced by view layer
   autoScroll: () => void = () => {};
   justDropped?: Role;
@@ -795,8 +796,17 @@ export default class RoundController implements MoveRootCtrl {
         this.redraw();
       } else {
         clearInterval(this.seriesRestInterval);
+        clearInterval(this.seriesRestPingInterval);
       }
     }, 1000) as unknown as number;
+    // Resting 중 series lastSeenAt 갱신 (DC 감지용)
+    clearInterval(this.seriesRestPingInterval);
+    const seriesId = this.data.series?.id;
+    if (seriesId) {
+      this.seriesRestPingInterval = setInterval(() => {
+        fetch(`/api/series/${seriesId}`, { headers: { Accept: 'application/json' } });
+      }, 3000) as unknown as number;
+    }
     this.redraw();
   };
 

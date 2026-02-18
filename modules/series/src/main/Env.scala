@@ -63,8 +63,6 @@ final class Env(
       s.phase match
         case Series.Phase.Banning =>
           timeouts.schedule(s.id) // Reschedule for Banning phase
-        case Series.Phase.Selecting =>
-          timeouts.schedule(s.id) // Schedule timeout for Selecting phase (DC → forfeit)
         case Series.Phase.Resting =>
           timeouts.schedule(s.id) // Schedule timeout for Resting phase (auto-transition)
         case Series.Phase.RandomSelecting | Series.Phase.Playing | Series.Phase.Finished =>
@@ -92,17 +90,11 @@ final class Env(
   Bus.sub[lila.core.game.FinishGame]:
     case lila.core.game.FinishGame(game, _) =>
       game.metadata.seriesId.foreach: seriesId =>
-        // rageQuit (disconnect) = Status.Timeout with a winner
-        // normal clock expiry = Status.Outoftime (not forfeit)
-        val isRageQuit = game.status == chess.Status.Timeout && game.winner.isDefined
-        // Game aborted in series = player didn't make their move (disconnected)
-        // turnColor = the side that was supposed to move but didn't → they forfeit
-        val isAbortForfeit = game.status == chess.Status.Aborted
-        val isDisconnectForfeit = isRageQuit || isAbortForfeit
+        // Aborted game: winner is the player who was NOT supposed to move
         val effectiveWinnerId =
-          if isAbortForfeit then game.player(!game.turnColor).userId
+          if game.status == chess.Status.Aborted then game.player(!game.turnColor).userId
           else game.winnerUserId
-        api.finishGame(seriesId, game.id, effectiveWinnerId, isDisconnectForfeit)
+        api.finishGame(seriesId, game.id, effectiveWinnerId)
 
   // When a series game finishes but series continues (Game 1 only)
   // Game 2+ with winner goes to Selecting, Game 2+ draw goes to RandomSelecting
@@ -122,6 +114,7 @@ final class Env(
   // When entering Selecting phase (Game 2+ with winner)
   Bus.sub[SeriesEnterSelecting]:
     case SeriesEnterSelecting(s, oldGameId) =>
+      timeouts.schedule(s.id)
       Bus.pub(lila.game.actorApi.NotifySeriesSelecting(s.id, oldGameId))
 
   // When draw occurs in Game 2+ - redirect to random selecting page
