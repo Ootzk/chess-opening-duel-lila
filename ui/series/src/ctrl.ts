@@ -824,11 +824,13 @@ export default class SeriesPickCtrl {
 
     const animate = () => {
       if (step >= sequence.length) {
-        // Roulette done → switch to result view
-        this.roulettePhase = 'result';
-        this.randomSelectingCountdown = 5;
-        this.redraw();
-        this.startRandomSelectingCountdown();
+        // Roulette done → pause 3s on highlighted card, then switch to result view
+        setTimeout(() => {
+          this.roulettePhase = 'result';
+          this.randomSelectingCountdown = 5;
+          this.redraw();
+          this.startRandomSelectingCountdown();
+        }, 3000);
         return;
       }
       // Direct DOM manipulation for performance (no full Snabbdom redraw)
