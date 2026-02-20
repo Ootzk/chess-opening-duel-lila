@@ -591,6 +591,14 @@ final class SeriesApi(
 
                   for
                     game <- createGame(clearSelecting, round, opening)
+                    // Offset movedAt by showcase animation so NoStart timer starts after showcase
+                    _ <- {
+                      import lila.db.dsl.{ *, given }
+                      gameRepo.coll.update.one(
+                        $id(game.id),
+                        $set("ua" -> game.movedAt.plusSeconds(Series.selectingShowcaseTimeout.toLong))
+                      )
+                    }
                     withGame = clearSelecting
                       .addGame(SeriesGame(
                         gameId = game.id,
@@ -628,6 +636,14 @@ final class SeriesApi(
 
                   for
                     game <- createGame(clearSelecting, round, opening)
+                    // Offset movedAt by showcase animation so NoStart timer starts after showcase
+                    _ <- {
+                      import lila.db.dsl.{ *, given }
+                      gameRepo.coll.update.one(
+                        $id(game.id),
+                        $set("ua" -> game.movedAt.plusSeconds(Series.selectingShowcaseTimeout.toLong))
+                      )
+                    }
                     withGame = clearSelecting
                       .addGame(SeriesGame(
                         gameId = game.id,
@@ -810,6 +826,15 @@ final class SeriesApi(
 
     for
       game <- createGame(withOpening, round, selected)
+      // Offset movedAt by showcase animation so NoStart timer starts after showcase
+      _ <- {
+        import lila.db.dsl.{ *, given }
+        val offset = if s.phase == Series.Phase.Selecting then Series.selectingShowcaseTimeout.toLong else 0L
+        gameRepo.coll.update.one(
+          $id(game.id),
+          $set("ua" -> game.movedAt.plusSeconds(offset))
+        )
+      }
       withGame = withOpening
         .addGame(SeriesGame(
           gameId = game.id,
