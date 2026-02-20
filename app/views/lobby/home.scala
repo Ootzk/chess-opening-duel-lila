@@ -56,10 +56,10 @@ object home:
               )
             )
           ),
-          currentGame
-            .map(bits.currentGameInfo)
+          currentSeries
+            .map(bits.currentSeriesInfo)
             .orElse:
-              currentSeries.map(bits.currentSeriesInfo)
+              currentGame.map(bits.currentGameInfo)
             .orElse:
               hasUnreadLichessMessage.option(bits.showUnreadLichessMessage)
             .orElse:

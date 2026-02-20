@@ -75,7 +75,7 @@ final class SeriesRepo(val coll: Coll)(using Executor):
         ).void
       else funit
 
-  /** 특정 유저의 활성 시리즈 조회 (Playing 페이즈 제외 - currentGame이 처리) */
+  /** 특정 유저의 활성 시리즈 조회 */
   def activeByUser(userId: UserId): Fu[Option[Series]] =
     coll
       .find(
@@ -83,8 +83,7 @@ final class SeriesRepo(val coll: Coll)(using Executor):
           $doc("p0.u" -> userId),
           $doc("p1.u" -> userId)
         ) ++ $doc(
-          "st".$in(List(Series.Status.Created.id, Series.Status.Started.id)),
-          "ph".$ne(Series.Phase.Playing.id)
+          "st".$in(List(Series.Status.Created.id, Series.Status.Started.id))
         )
       )
       .sort($doc("ca" -> -1))
