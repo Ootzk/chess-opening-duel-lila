@@ -308,6 +308,11 @@ final class SeriesApi(
       val withOpening = s.markOpeningUsed(selected.id, round, SelectionMethod.SystemRandom)
       val inRandomSelecting = withOpening.setPhase(Series.Phase.RandomSelecting)
 
+      // Dynamic offset: match frontend roulette animation timing
+      // Frontend: spin = min(8, 2 + cardCount), then 3s pause, then 5s countdown
+      val spinTime = math.min(8, 2 + pool.size)
+      val animationOffset = spinTime + 3 + 5
+
       for
         game <- createGame(inRandomSelecting, round, selected)
         // Offset movedAt by animation duration so NoStart timer accounts for RandomSelecting.
@@ -317,7 +322,7 @@ final class SeriesApi(
           import lila.db.dsl.{ *, given }
           gameRepo.coll.update.one(
             $id(game.id),
-            $set("ua" -> game.movedAt.plusSeconds(Series.randomSelectingTimeout.toLong))
+            $set("ua" -> game.movedAt.plusSeconds(animationOffset.toLong))
           )
         }
         withGame = inRandomSelecting.addGame(SeriesGame(
@@ -329,7 +334,7 @@ final class SeriesApi(
         _ <- repo.update(withGame)
         // Delay onStart until both clients signal animation done (or fallback timeout)
         // Game is created now (for redirect gameId), but round actor + NoStart timer start later
-        cancellable = scheduler.scheduleOnce((Series.randomSelectingTimeout + 3).seconds):
+        cancellable = scheduler.scheduleOnce((animationOffset + 3).seconds):
           gameStartSchedules.remove(withGame.id)
           triggerGameStart(withGame.id, game.id)
         _ = gameStartSchedules.put(withGame.id, cancellable)
