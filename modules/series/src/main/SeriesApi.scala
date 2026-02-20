@@ -55,8 +55,7 @@ final class SeriesApi(
         s.playerIndex(userId) match
           case None => fuccess(Some(s))
           case Some(idx) =>
-            val updated = s.updatePlayer(idx, _.updateLastSeen)
-            repo.update(updated).inject(Some(updated))
+            repo.setLastSeen(seriesId, idx) >> repo.byId(seriesId).dmap(_ orElse Some(s))
 
   /** WebSocket ping - atomically updates lastSeen for a specific player.
     * Uses $set to avoid read-modify-write race conditions with concurrent operations
