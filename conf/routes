@@ -498,6 +498,7 @@ POST  /series/$id<\w{8}>/confirmSelecting     controllers.Series.confirmSelectin
 POST  /series/$id<\w{8}>/cancelConfirmSelecting controllers.Series.cancelConfirmSelecting(id: SeriesId)
 POST  /series/$id<\w{8}>/confirmNext           controllers.Series.confirmNextGame(id: SeriesId)
 POST  /series/$id<\w{8}>/cancelConfirmNext   controllers.Series.cancelConfirmNextGame(id: SeriesId)
+POST  /series/$id<\w{8}>/ready                controllers.Series.ready(id: SeriesId)
 POST  /series/$id<\w{8}>/forfeit              controllers.Series.forfeit(id: SeriesId)
 POST  /series/$id<\w{8}>/rematch             controllers.Series.rematch(id: SeriesId)
 

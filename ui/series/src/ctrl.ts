@@ -896,6 +896,12 @@ export default class SeriesPickCtrl {
   private startGame(): void {
     const gameId = this.series.currentGame;
     if (gameId) {
+      // Signal server that animation is done → triggers onStart when both players ready
+      fetch(`/series/${this.series.id}/ready`, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        keepalive: true,
+      });
       this.startGameWithId(gameId);
     } else {
       console.warn('[series] No gameId yet, waiting for WebSocket event...');

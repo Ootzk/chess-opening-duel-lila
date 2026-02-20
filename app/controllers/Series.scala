@@ -347,6 +347,17 @@ final class Series(env: Env) extends LilaController(env):
       case None    => NotFound
   }
 
+  // RandomSelecting 애니메이션 종료 시그널
+  def ready(id: SeriesId) = Auth { ctx ?=> me ?=>
+    Found(api.byId(id)): s =>
+      if !isPlayer(s, me.userId) then
+        JsonBadRequest(jsonError("Not a player of this series"))
+      else
+        api.playerReady(id, me.userId).map:
+          case Some(_) => JsonOk(Json.obj("ok" -> true))
+          case None    => JsonBadRequest(jsonError("Not in RandomSelecting phase"))
+  }
+
   // 시리즈 포기 (전체 시리즈를 presser 패배로 종료)
   def forfeit(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>

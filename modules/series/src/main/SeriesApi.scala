@@ -25,6 +25,11 @@ final class SeriesApi(
   // Track scheduled confirm-delay tasks so they can be cancelled
   private val confirmDelaySchedules = scalalib.ConcurrentMap[SeriesId, Cancellable](64)
 
+  // Track scheduled game-start tasks for RandomSelecting (delayed onStart)
+  private val gameStartSchedules = scalalib.ConcurrentMap[SeriesId, Cancellable](64)
+  // Track which players have signaled "ready" after RandomSelecting animation
+  private val readyPlayers = scalalib.ConcurrentMap[SeriesId, Set[Int]](64)
+
   /** Get user's opening pool (custom or default) */
   def userPool(userId: UserId): Fu[Vector[OpeningPreset]] =
     poolApi.getPresetsForUser(userId).map(_.toVector)
@@ -305,6 +310,16 @@ final class SeriesApi(
 
       for
         game <- createGame(inRandomSelecting, round, selected)
+        // Offset movedAt by animation duration so NoStart timer accounts for RandomSelecting.
+        // The round actor reads movedAt from DB when created (by WebSocket or onStart),
+        // so this ensures scheduleExpiration uses the correct baseline regardless of creation path.
+        _ <- {
+          import lila.db.dsl.{ *, given }
+          gameRepo.coll.update.one(
+            $id(game.id),
+            $set("ua" -> game.movedAt.plusSeconds(Series.randomSelectingTimeout.toLong))
+          )
+        }
         withGame = inRandomSelecting.addGame(SeriesGame(
           gameId = game.id,
           round = round,
@@ -312,12 +327,48 @@ final class SeriesApi(
           whitePlayerIndex = inRandomSelecting.whitePlayerForOpening(selected)
         ))
         _ <- repo.update(withGame)
-        _ <- onStart.exec(game.id)
+        // Delay onStart until both clients signal animation done (or fallback timeout)
+        // Game is created now (for redirect gameId), but round actor + NoStart timer start later
+        cancellable = scheduler.scheduleOnce((Series.randomSelectingTimeout + 3).seconds):
+          gameStartSchedules.remove(withGame.id)
+          triggerGameStart(withGame.id, game.id)
+        _ = gameStartSchedules.put(withGame.id, cancellable)
+        _ = readyPlayers.remove(withGame.id)
       yield
         oldGameId match
           case None      => Bus.pub(SeriesPhaseChanged(withGame))
           case Some(gId) => Bus.pub(SeriesDrawRandomSelecting(withGame, gId))
         Some(withGame)
+
+  // ===== RandomSelecting ready signal =====
+
+  /** Client signals animation done → when both ready, trigger game start */
+  def playerReady(seriesId: SeriesId, userId: UserId): Fu[Option[Series]] =
+    repo.byId(seriesId).flatMap:
+      case Some(s) if s.phase == Series.Phase.RandomSelecting =>
+        s.playerIndex(userId) match
+          case Some(idx) =>
+            val current = readyPlayers.get(seriesId).getOrElse(Set.empty[Int])
+            val updated = current + idx
+            readyPlayers.put(seriesId, updated)
+            if updated.size >= 2 then
+              gameStartSchedules.remove(seriesId).foreach(_.cancel())
+              s.currentGameId.foreach(triggerGameStart(seriesId, _))
+            fuccess(Some(s))
+          case None => fuccess(None)
+      case _ => fuccess(None)
+
+  /** Update movedAt to now and call onStart (creates round actor + NoStart timer) */
+  private def triggerGameStart(seriesId: SeriesId, gameId: GameId): Unit =
+    import lila.db.dsl.{ *, given }
+    readyPlayers.remove(seriesId)
+    for
+      _ <- gameRepo.coll.update.one(
+        $id(gameId),
+        $set("ua" -> nowInstant)
+      )
+      _ <- onStart.exec(gameId)
+    yield ()
 
   // ===== 게임 종료 처리 =====
 
@@ -703,6 +754,8 @@ final class SeriesApi(
       Some(forfeited)
 
   private def abortSeries(s: Series): Fu[Option[Series]] =
+    gameStartSchedules.remove(s.id).foreach(_.cancel())
+    readyPlayers.remove(s.id)
     val aborted = s.copy(
       status = Series.Status.Aborted,
       phase = Series.Phase.Finished,
