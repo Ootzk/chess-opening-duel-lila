@@ -282,9 +282,7 @@ final class layout(helpers: Helpers, assetHelper: lila.web.ui.AssetFullHelper)(
           title := trans.team.teams.txt()
         )
 
-    private val siteNameFrag: Frag =
-      if siteName == "lichess.org" then frag("lichess", span(".org"))
-      else frag(siteName)
+    private val siteNameFrag: Frag = frag("Chess Opening Duel")
 
     def apply(
         zenable: Boolean,
@@ -296,23 +294,14 @@ final class layout(helpers: Helpers, assetHelper: lila.web.ui.AssetFullHelper)(
     )(using ctx: PageContext) =
       header(id := "top")(
         div(cls := "site-title-nav")(
-          (!isAppealUser).option(topnavToggle),
+          emptyFrag,
           a(cls := "site-title", href := langHref("/"))(
             if ctx.kid.yes then span(title := trans.site.kidMode.txt(), cls := "kiddo")(":)")
             else ctx.isBot.option(botImage),
-            div(cls := "site-icon", dataIcon := Icon.Logo),
+            div(cls := "site-icon", dataIcon := Icon.Swords),
             div(cls := "site-name")(siteNameFrag)
           ),
-          (!isAppealUser).option(
-            frag(
-              topnav,
-              (ctx.kid.no && !ctx.me.exists(_.isPatron) && !zenable).option(
-                a(cls := "site-title-nav__donate")(
-                  href := routes.Plan.index()
-                )(trans.patron.donate())
-              )
-            )
-          ),
+          (!isAppealUser).option(topnav),
           ctx.blind.option(h2("Navigation"))
         ),
         div(cls := "site-buttons")(

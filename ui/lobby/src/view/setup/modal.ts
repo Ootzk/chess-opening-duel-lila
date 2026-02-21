@@ -16,6 +16,7 @@ export default function setupModal(ctrl: LobbyController): VNode[] | null {
     hook: i18n.site.createLobbyGame,
     friend: setupCtrl.friendUser ? i18n.site.challengeX(setupCtrl.friendUser) : i18n.site.challengeAFriend,
     openingDuel: setupCtrl.friendUser ? `Challenge ${setupCtrl.friendUser} - Opening Duel` : 'Opening Duel',
+    openingDuelAnyone: 'Opening Duel with Anyone',
     openingDuelAi: 'Opening Duel with Computer',
     ai: i18n.site.playAgainstComputer,
   }[setupCtrl.gameType];
@@ -74,6 +75,12 @@ const views = {
   openingDuel: (ctrl: LobbyController): LooseVNodes => [
     fenInput(ctrl.setupCtrl),
     timePickerAndSliders(ctrl.setupCtrl.timeControl, 0),
+    colorButtons(ctrl),
+  ],
+  openingDuelAnyone: (ctrl: LobbyController): LooseVNodes => [
+    timePickerAndSliders(ctrl.setupCtrl.timeControl, 0),
+    ratingView(ctrl),
+    ratingDifferenceSliders(ctrl),
     colorButtons(ctrl),
   ],
   openingDuelAi: (ctrl: LobbyController): LooseVNodes => [

@@ -17,8 +17,8 @@ export const ratingDifferenceSliders = (ctrl: LobbyController) => {
       attrs: {
         type: 'range',
         'aria-label': i18n.site.ratingFilter,
-        min: isMin ? '-500' : '0',
-        max: isMin ? '0' : '500',
+        min: isMin ? '-1500' : '0',
+        max: isMin ? '0' : '1500',
         step: '50',
         disabled: isProvisional,
       },

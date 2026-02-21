@@ -49,6 +49,7 @@ export default class SetupController {
       hook: this.makeSetupStore('hook'),
       friend: this.makeSetupStore('friend'),
       openingDuel: this.makeSetupStore('openingDuel'),
+      openingDuelAnyone: this.makeSetupStore('openingDuelAnyone'),
       openingDuelAi: this.makeSetupStore('openingDuelAi'),
       ai: this.makeSetupStore('ai'),
     };
@@ -61,7 +62,7 @@ export default class SetupController {
     storedJsonProp<SetupStore>(this.storeKey(gameType), () => ({
       variant: 'standard',
       fen: '',
-      timeMode: gameType === 'hook' || gameType === 'openingDuelAi' ? 'realTime' : 'unlimited',
+      timeMode: gameType === 'hook' || gameType === 'openingDuelAnyone' || gameType === 'openingDuelAi' ? 'realTime' : 'unlimited',
       time: 5,
       increment: 3,
       days: 2,
@@ -298,12 +299,12 @@ export default class SetupController {
       return;
     }
 
-    if (this.gameType === 'hook') this.root.setTab(this.timeControl.isRealTime() ? 'real_time' : 'seeks');
+    if (this.gameType === 'hook' || this.gameType === 'openingDuelAnyone') this.root.setTab(this.timeControl.isRealTime() ? 'real_time' : 'seeks');
     this.loading = true;
     this.root.redraw();
 
-    let urlPath = `/setup/${this.gameType}`;
-    if (this.gameType === 'hook') urlPath += `/${site.sri}`;
+    let urlPath = `/setup/${this.gameType === 'openingDuelAnyone' ? 'hook' : this.gameType}`;
+    if (this.gameType === 'hook' || this.gameType === 'openingDuelAnyone') urlPath += `/${site.sri}`;
     const urlParams = { user: this.friendUser || undefined };
     let response;
     try {

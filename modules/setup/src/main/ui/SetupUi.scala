@@ -38,15 +38,6 @@ final class SetupUi(helpers: Helpers):
     st.form(novalidate)(
       table(
         tbody(
-          tr(cls := "variant")(
-            td(trans.site.variant()),
-            td(
-              setupCheckboxes(
-                form("variant"),
-                translatedVariantChoicesWithVariants(_.key.value)
-              )
-            )
-          ),
           tr(
             td(trans.site.timeControl()),
             td(setupCheckboxes(form("speed"), translatedSpeedChoices))
@@ -58,12 +49,6 @@ final class SetupUi(helpers: Helpers):
                 form("increment"),
                 translatedIncrementChoices
               )
-            )
-          ),
-          ctx.isAuth.option(
-            tr(cls := "inline")(
-              td(trans.site.mode()),
-              td(setupCheckboxes(form("mode"), translatedModeChoices))
             )
           ),
           ctx.isAuth.option(

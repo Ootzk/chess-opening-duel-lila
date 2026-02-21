@@ -8,7 +8,7 @@
   color: $c-font;
 
   @include mq-topnav-hidden {
-    margin-inline-start: calc(0.5rem + $site-header-height);
+    margin-inline-start: 0.5rem;
   }
 
   @include mq-site-header-tall {
@@ -32,30 +32,11 @@
     @media (min-height: at-least($tall)) {
       font-size: 36px;
     }
-    display: none;
-  }
-
-  @media (max-width: at-least($xx-small)) {
-    display: none;
-  }
-
-  @media (min-width: at-least($xx-small)) {
-    .site-icon {
-      display: block;
-    }
+    display: block;
   }
 
   @media (min-width: at-least(1180px)) {
     .site-name {
-      display: block;
-    }
-    .site-icon {
-      display: none;
-    }
-  }
-
-  @media (min-width: at-least($xx-large)) {
-    .site-icon {
       display: block;
     }
   }

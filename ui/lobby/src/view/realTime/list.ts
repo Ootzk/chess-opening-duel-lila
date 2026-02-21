@@ -29,7 +29,6 @@ function renderHook(ctrl: LobbyController, hook: Hook) {
         : i18n.site.anonymous,
       ...(!ctrl.me ? [] : !ctrl.opts.showRatings ? [''] : [hook.rating + (hook.prov ? '?' : '')]),
       hook.clock,
-      h('span', { attrs: { 'data-icon': perfIcons[hook.perf] } }, i18n.site[hook.ra ? 'rated' : 'casual']),
     ]),
   );
 }
@@ -99,7 +98,6 @@ export const render = (ctrl: LobbyController, allHooks: Hook[]) => {
             [h('i.is'), i18n.site.time],
           ),
         ],
-        h('th', [h('i.is'), i18n.site.mode]),
       ]),
     ),
     h(

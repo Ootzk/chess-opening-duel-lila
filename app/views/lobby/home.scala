@@ -45,14 +45,11 @@ object home:
         )(
           div(cls := "lobby__table")(
             div(cls := "lobby__start")(
-              button(cls := "button button-metal lobby__start__button lobby__start__button--hook")(
-                trans.site.createLobbyGame()
+              button(cls := "button button-metal lobby__start__button lobby__start__button--openingDuel")(
+                "Opening Duel"
               ),
-              button(cls := "button button-metal lobby__start__button lobby__start__button--friend")(
-                trans.site.challengeAFriend()
-              ),
-              button(cls := "button button-metal lobby__start__button lobby__start__button--ai")(
-                trans.site.playAgainstComputer()
+              button(cls := "button button-metal lobby__start__button lobby__start__button--openingDuelAi")(
+                "Opening Duel with Computer"
               )
             )
           ),
@@ -66,95 +63,4 @@ object home:
               playban.map(bits.playbanInfo)
             .getOrElse:
               if ctx.blind then blindLobby(blindGames) else bits.lobbyApp
-          ,
-          div(cls := "lobby__side")(
-            ctx.blind.option(h2(trans.nvui.featuredEvents())),
-            ctx.kid.no.option(views.streamer.bits.liveStreams(streams)),
-            div(cls := "lobby__spotlights"):
-              val eventTags = events.map(bits.spotlight)
-              val relayTags = views.relay.ui.spotlight(relays)
-              frag(
-                eventTags,
-                relayTags,
-                ctx.noBot.option {
-                  val nbManual = eventTags.size + relayTags.size
-                  val simulBBB = simuls.find(isFeaturable(_) && nbManual < 4)
-                  val nbForced = nbManual + simulBBB.size.toInt
-                  val tourBBBs = if nbForced > 3 then 0 else if nbForced == 3 then 1 else 3 - nbForced
-                  frag(
-                    lila.tournament.Spotlight.select(tours, tourBBBs).map {
-                      views.tournament.list.homepageSpotlight(_)
-                    },
-                    swiss.ifTrue(nbForced < 3).map(views.swiss.ui.homepageSpotlight),
-                    simulBBB.map(views.simul.ui.homepageSpotlight)
-                  )
-                }
-              )
-            ,
-            classes.nonEmpty.option:
-              div(cls := "lobby__classes"):
-                classes.map: clas =>
-                  a(href := routes.Clas.show(clas.id), dataIcon := Icon.Group)(clas.name)
-            ,
-            if ctx.isAuth then
-              div(cls := "lobby__timeline")(
-                ctx.blind.option(h2(trans.site.timeline())),
-                views.timeline.entries(userTimeline),
-                userTimeline.nonEmpty.option:
-                  a(cls := "more", href := routes.Timeline.home)(trans.site.more(), " »")
-              )
-            else
-              div(cls := "about-side")(
-                ctx.blind.option(h2(trans.site.about())),
-                trans.site.xIsAFreeYLibreOpenSourceChessServer(
-                  "Lichess",
-                  a(cls := "blue", href := routes.Plan.features)(trans.site.really.txt())
-                ),
-                " ",
-                a(href := "/about")(trans.site.aboutX("Lichess"), "...")
-              )
-          ),
-          featured.map: g =>
-            div(cls := "lobby__tv"):
-              views.game.mini(Pov.naturalOrientation(g), tv = true)
-          ,
-          puzzle.map: p =>
-            views.puzzle.bits.dailyLink(p)(cls := "lobby__puzzle"),
-          div(cls := "lobby__blog carousel")(
-            ublogPosts.map:
-              views.ublog.ui
-                .card(_, showAuthor = views.ublog.ui.ShowAt.bottom, showIntro = false, strictDate = false)
-          ),
-          ctx.noBot.option(bits.underboards(tours, simuls)),
-          div(cls := "lobby__feed"):
-            views.feed.lobbyUpdates(lastUpdates)
-          ,
-          div(cls := "lobby__support")(
-            a(href := routes.Plan.index())(
-              iconTag(patronIconChar),
-              span(cls := "lobby__support__text")(
-                strong(trans.patron.donate()),
-                span(trans.patron.becomePatron())
-              )
-            ),
-            a(href := "/swag")(
-              iconTag(Icon.Tshirt),
-              span(cls := "lobby__support__text")(
-                strong("Swag Store"),
-                span(trans.site.playChessInStyle())
-              )
-            )
-          ),
-          div(cls := "lobby__about")(
-            ctx.blind.option(h2(trans.site.about())),
-            a(href := "/about")(trans.site.aboutX("Lichess")),
-            a(href := "/faq")(trans.faq.faqAbbreviation()),
-            a(href := "/contact")(trans.contact.contact()),
-            a(href := "/mobile")(trans.site.mobileApp()),
-            a(href := routes.Cms.tos)(trans.site.termsOfService()),
-            a(href := "/privacy")(trans.site.privacy()),
-            a(href := "/source")(trans.site.sourceCode()),
-            a(href := "/ads")("Ads"),
-            views.bits.connectLinks
-          )
         )
