@@ -18,7 +18,8 @@ case class HookConfig(
     days: Days,
     rated: Rated,
     color: TriColor,
-    ratingRange: RatingRange
+    ratingRange: RatingRange,
+    openingDuel: Boolean = false
 ) extends HumanConfig:
 
   def withinLimits(using me: Option[Me], perf: Perf): HookConfig =
@@ -33,7 +34,8 @@ case class HookConfig(
     days,
     rated.id.some,
     ratingRange.toString.some,
-    color.name.some
+    color.name.some,
+    openingDuel.some.filter(identity)
   ).some
 
   def withTimeModeString(tc: Option[String]) =
@@ -62,7 +64,8 @@ case class HookConfig(
             user = user,
             blocking = blocking,
             sid = sid,
-            ratingRange = ratingRange
+            ratingRange = ratingRange,
+            openingDuel = openingDuel
           )
       case _ =>
         Right:
@@ -103,7 +106,8 @@ object HookConfig extends BaseConfig:
       d: Days,
       m: Option[Int],
       e: Option[String],
-      c: Option[String]
+      c: Option[String],
+      od: Option[Boolean]
   ) =
     new HookConfig(
       variant = chess.variant.Variant.orDefault(v),
@@ -113,7 +117,8 @@ object HookConfig extends BaseConfig:
       days = d,
       rated = m.fold(Rated.default)(Rated.orDefault),
       color = TriColor.orDefault(c),
-      ratingRange = e.fold(RatingRange.default)(RatingRange.orDefault)
+      ratingRange = e.fold(RatingRange.default)(RatingRange.orDefault),
+      openingDuel = od.getOrElse(false)
     )
 
   def default(auth: Boolean): HookConfig = default.copy(rated = Rated(auth))

@@ -24,7 +24,8 @@ case class Hook(
     user: Option[LobbyUser],
     ratingRange: RatingRange,
     createdAt: Instant,
-    boardApi: Boolean
+    boardApi: Boolean,
+    openingDuel: Boolean = false
 ):
 
   val realVariant = Variant.orDefault(variant)
@@ -33,7 +34,8 @@ case class Hook(
 
   def compatibleWith(h: Hook) =
     isAuth == h.isAuth &&
-      rated == h.rated &&
+      openingDuel == h.openingDuel &&
+      (openingDuel || rated == h.rated) &&
       variant == h.variant &&
       clock == h.clock &&
       color.compatibleWith(h.color) &&
@@ -80,7 +82,7 @@ case class Hook(
     .add("variant" -> realVariant.exotic.option(realVariant.key))
     .add("ra" -> rated.yes.option(1))
 
-  def seemsCompatibleWithPools = rated.yes && realVariant.standard && color == TriColor.Random
+  def seemsCompatibleWithPools = !openingDuel && rated.yes && realVariant.standard && color == TriColor.Random
 
   def compatibleWithPools(using isClockCompatible: IsClockCompatible) =
     seemsCompatibleWithPools && isClockCompatible.exec(clock)
@@ -104,7 +106,8 @@ object Hook:
       sid: Option[String],
       ratingRange: RatingRange,
       blocking: lila.core.pool.Blocking,
-      boardApi: Boolean = false
+      boardApi: Boolean = false,
+      openingDuel: Boolean = false
   ): Hook =
     new Hook(
       id = ThreadLocalRandom.nextString(idSize),
@@ -117,7 +120,8 @@ object Hook:
       sid = sid,
       ratingRange = ratingRange,
       createdAt = nowInstant,
-      boardApi = boardApi
+      boardApi = boardApi,
+      openingDuel = openingDuel
     )
 
   import lila.core.pool.{ PoolFrom, PoolMember }

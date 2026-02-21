@@ -132,3 +132,9 @@ final class Env(
     case SeriesFinished(s) =>
       s.lastFinishedGame.foreach: lastGame =>
         Bus.pub(lila.game.actorApi.NotifySeriesFinished(s.id, lastGame.gameId))
+
+  // Hook matching → create Series and redirect both players to pick page
+  Bus.sub[lila.core.series.SeriesHookMatch]:
+    case lila.core.series.SeriesHookMatch(ownerSri, joinerSri, ownerId, joinerId, variant, clock) =>
+      api.create(ownerId, joinerId, variant, clock).foreach: s =>
+        Bus.pub(lila.core.series.LobbySeriesRedirect(ownerSri, joinerSri, s.id))

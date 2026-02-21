@@ -143,7 +143,12 @@ final private class LobbySyncActor(
     hookRepo.byId(hookId).foreach { hook =>
       remove(hook)
       hookRepo.bySri(sri).foreach(remove)
-      biter(hook, sri, user).foreach(this.!)
+      if hook.openingDuel then
+        for
+          ownerId <- hook.userId
+          joinerId <- user.map(_.id)
+        do Bus.pub(lila.core.series.SeriesHookMatch(hook.sri, sri, ownerId, joinerId, hook.realVariant, hook.clock))
+      else biter(hook, sri, user).foreach(this.!)
     }
 
   private def findCompatible(hook: Hook): Option[Hook] =

@@ -262,6 +262,7 @@ export default class SetupController {
       ratingRange_range_max: this.ratingMax().toString(),
       level: this.aiLevel().toString(),
       color,
+      openingDuel: this.gameType === 'openingDuelAnyone' ? 'true' : undefined,
     });
 
   validFen = (): boolean => this.variant() !== 'fromPosition' || (!this.fenError && !!this.fen());

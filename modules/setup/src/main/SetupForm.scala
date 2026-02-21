@@ -67,7 +67,8 @@ object SetupForm:
       "days" -> days,
       "mode" -> mode(me.isDefined),
       "ratingRange" -> optional(ratingRange),
-      "color" -> lila.common.Form.empty
+      "color" -> lila.common.Form.empty,
+      "openingDuel" -> optional(boolean)
     )(HookConfig.from)(_.>>)
       .verifying("Invalid clock", _.validClock)
       .verifying("Can't create rated unlimited game", !_.isRatedUnlimited)

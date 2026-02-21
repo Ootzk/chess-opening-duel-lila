@@ -100,6 +100,11 @@ final class LobbySocket(
 
       case lila.core.pool.Pairings(pairings) => send.exec(Out.pairings(pairings))
 
+      case lila.core.series.LobbySeriesRedirect(ownerSri, joinerSri, seriesId) =>
+        val msg = makeMessage("redirect", Json.obj("id" -> seriesId.value, "url" -> s"/series/$seriesId/pick"))
+        send.exec(P.Out.tellSri(ownerSri, msg))
+        send.exec(P.Out.tellSri(joinerSri, msg))
+
       case HookIds(ids) => tellActiveHookSubscribers(makeMessage("hli", ids.mkString("")))
 
       case SetupBus.AddSeek(_) | RemoveSeek(_) => tellActive(makeMessage("reload_seeks"))
@@ -117,6 +122,7 @@ final class LobbySocket(
     Bus.subscribeActor[ReloadTimelines](this)
     Bus.subscribeActor[ChangeFeatured](this)
     Bus.subscribeActor[lila.core.pool.Pairings](this)
+    Bus.subscribeActor[lila.core.series.LobbySeriesRedirect](this)
     scheduler.scheduleOnce(7.seconds)(this ! SendHookRemovals)
     scheduler.scheduleWithFixedDelay(31.seconds, 31.seconds)(() => this ! Cleanup)
 
