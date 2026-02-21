@@ -23,7 +23,6 @@ final class Env(
 ):
 
   private val seriesColl: Coll      = db(CollName("series"))
-  private val openingsColl: Coll    = db(CollName("openings"))
   private val openingPoolColl: Coll = db(CollName("opening_pool"))
 
   // Make scheduler available for wire macro
@@ -32,14 +31,11 @@ final class Env(
   // 명시적 생성 (macwire Coll 다중 인스턴스 disambiguation 방지)
   lazy val repo: SeriesRepo = SeriesRepo(seriesColl)
 
-  lazy val poolRepo: OpeningPoolRepo = OpeningPoolRepo(openingsColl, openingPoolColl)
+  lazy val poolRepo: OpeningPoolRepo = OpeningPoolRepo(openingPoolColl)
 
   lazy val poolApi: OpeningPoolApi = OpeningPoolApi(poolRepo)
 
   lazy val api: SeriesApi = SeriesApi(repo, gameRepo, userApi, onStart, poolApi, apiScheduler)
-
-  // 앱 시작 시 마스터 오프닝 시드 (idempotent)
-  poolApi.seedMasterOpenings()
 
   lazy val jsonView: SeriesJson = wire[SeriesJson]
 

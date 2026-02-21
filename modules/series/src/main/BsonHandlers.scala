@@ -55,34 +55,23 @@ object BsonHandlers:
   // PoolOpeningId
   given BSONHandler[PoolOpeningId] = stringAnyValHandler(_.value, PoolOpeningId(_))
 
-  // PoolEntry
+  // PoolEntry (opening_pool 컬렉션에 임베딩)
   given BSONDocumentHandler[PoolEntry] = new BSONDocumentHandler[PoolEntry]:
     def readDocument(doc: BSONDocument) =
       for
-        openingId <- doc.getAsTry[PoolOpeningId]("i")
-        colorBool = doc.getAsOpt[Boolean]("c").getOrElse(true)
-      yield PoolEntry(openingId, if colorBool then chess.Color.White else chess.Color.Black)
-
-    def writeTry(e: PoolEntry) = scala.util.Success($doc(
-      "i" -> e.openingId,
-      "c" -> (e.ownerColor == chess.Color.White)
-    ))
-
-  // PoolOpening (마스터 컬렉션)
-  given BSONDocumentHandler[PoolOpening] = new BSONDocumentHandler[PoolOpening]:
-    def readDocument(doc: BSONDocument) =
-      for
-        id <- doc.getAsTry[PoolOpeningId]("_id")
+        id <- doc.getAsTry[PoolOpeningId]("i")
         name <- doc.getAsTry[String]("n")
         fen <- doc.getAsTry[String]("f")
         url <- doc.getAsTry[String]("u")
-      yield PoolOpening(id, name, Fen.Full(fen), url)
+        colorBool = doc.getAsOpt[Boolean]("c").getOrElse(true)
+      yield PoolEntry(id, name, Fen.Full(fen), url, if colorBool then chess.Color.White else chess.Color.Black)
 
-    def writeTry(o: PoolOpening) = scala.util.Success($doc(
-      "_id" -> o.id,
-      "n"   -> o.name,
-      "f"   -> o.fen.value,
-      "u"   -> o.url
+    def writeTry(e: PoolEntry) = scala.util.Success($doc(
+      "i" -> e.id,
+      "n" -> e.name,
+      "f" -> e.fen.value,
+      "u" -> e.url,
+      "c" -> (e.ownerColor == chess.Color.White)
     ))
 
   // OpeningPool (유저별 pool)

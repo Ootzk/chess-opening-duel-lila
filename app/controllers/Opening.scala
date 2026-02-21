@@ -150,15 +150,15 @@ final class Opening(env: Env) extends LilaController(env):
       JsonOk(Json.obj("pool" -> pool.map(presetToJson)))
   }
 
-  // 검증용 API: 마스터 오프닝 전체 목록
+  // 검증용 API: 기본 오프닝 프리셋 목록
   def masterOpenings = Open:
-    env.series.poolApi.allMasterOpenings.map: openings =>
-      JsonOk(Json.obj("openings" -> openings.map(o => Json.obj(
-        "id"   -> o.id.value,
-        "name" -> o.name,
-        "fen"  -> o.fen.value,
-        "url"  -> o.url
-      ))))
+    val openings = lila.series.OpeningPresets.all
+    JsonOk(Json.obj("openings" -> openings.map(o => Json.obj(
+      "id"   -> lila.series.PoolEntry.nameToSlug(o.name),
+      "name" -> o.name,
+      "fen"  -> o.fen.value,
+      "url"  -> o.url
+    ))))
 
   private def presetToJson(p: lila.series.OpeningPreset) = Json.obj(
     "name"       -> p.name,
