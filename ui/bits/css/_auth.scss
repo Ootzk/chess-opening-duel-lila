@@ -58,6 +58,42 @@
   }
 }
 
+/* Standalone login page (noHeader) */
+#main-wrap:has(.auth-login--standalone) {
+  margin-top: 0;
+}
+
+.auth-login--standalone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 30em;
+  padding: 2rem 1rem;
+  margin: 0 auto;
+
+  .box {
+    width: 100%;
+  }
+}
+
+.auth-login__logo {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.auth-login__logo-icon {
+  font-size: 6em;
+  color: $c-brag;
+}
+
+.auth-login__logo h1 {
+  margin-top: 0.5rem;
+  font-size: 1.5em;
+}
+
 /* presumably the keyboard is up */
 @media (max-height: at-most($x-short)) {
   #top {

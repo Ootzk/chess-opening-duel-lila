@@ -17,54 +17,59 @@ final class AuthUi(helpers: Helpers):
     Page(trans.site.signIn.txt())
       .js(esmInit("bits.login", "login"))
       .css("bits.auth")
+      .flag(_.noHeader)
       .hrefLangs(lila.ui.LangPath(routes.Auth.login)):
-        main(cls := "auth auth-login box box-pad")(
-          h1(cls := "box__top")(trans.site.signIn()),
-          postForm(
-            cls := "form3",
-            action := addReferrer(routes.Auth.authenticate.url)
-          )(
-            div(cls := "one-factor")(
-              if form.globalError.exists(_.messages.contains("blankedPassword")) then
-                div(cls := "auth-login__blanked")(
-                  p(trans.site.blankedPassword()),
-                  a(href := routes.Auth.passwordReset, cls := "button button-no-upper")(
-                    trans.site.passwordReset()
+        main(cls := "auth auth-login auth-login--standalone")(
+          div(cls := "auth-login__logo")(
+            iconTag(Icon.Swords)(cls := "auth-login__logo-icon"),
+            h1("Chess Opening Duel")
+          ),
+          div(cls := "box box-pad")(
+            postForm(
+              cls := "form3",
+              action := addReferrer(routes.Auth.authenticate.url)
+            )(
+              div(cls := "one-factor")(
+                if form.globalError.exists(_.messages.contains("blankedPassword")) then
+                  div(cls := "auth-login__blanked")(
+                    p(trans.site.blankedPassword()),
+                    a(href := routes.Auth.passwordReset, cls := "button button-no-upper")(
+                      trans.site.passwordReset()
+                    )
                   )
-                )
-              else form3.globalError(form),
-              formFields(form("username"), form("password"), none, register = false),
-              form3.submit(trans.site.signIn(), icon = none),
-              label(cls := "login-remember")(
-                input(
-                  name := "remember",
-                  value := "true",
-                  tpe := "checkbox",
-                  isRememberMe.option(checked)
-                ),
-                trans.site.rememberMe()
-              )
-            ),
-            div(cls := "two-factor none")(
-              form3.group(
-                form("token"),
-                trans.tfa.authenticationCode(),
-                help = Some(span(dataIcon := Icon.PhoneMobile)(trans.tfa.openTwoFactorApp()))
-              )(
-                form3.input(_)(
-                  attr("inputmode") := "numeric",
-                  autocomplete := "one-time-code",
-                  pattern := "[0-9]{6}"
+                else form3.globalError(form),
+                formFields(form("username"), form("password"), none, register = false),
+                form3.submit(trans.site.signIn(), icon = none),
+                label(cls := "login-remember")(
+                  input(
+                    name := "remember",
+                    value := "true",
+                    tpe := "checkbox",
+                    isRememberMe.option(checked)
+                  ),
+                  trans.site.rememberMe()
                 )
               ),
-              p(cls := "error none")("Invalid code."),
-              form3.submit(trans.site.signIn(), icon = none)
+              div(cls := "two-factor none")(
+                form3.group(
+                  form("token"),
+                  trans.tfa.authenticationCode(),
+                  help = Some(span(dataIcon := Icon.PhoneMobile)(trans.tfa.openTwoFactorApp()))
+                )(
+                  form3.input(_)(
+                    attr("inputmode") := "numeric",
+                    autocomplete := "one-time-code",
+                    pattern := "[0-9]{6}"
+                  )
+                ),
+                p(cls := "error none")("Invalid code."),
+                form3.submit(trans.site.signIn(), icon = none)
+              )
+            ),
+            div(cls := "alternative")(
+              a(href := addReferrer(langHref(routes.Auth.signup)))(trans.site.signUp()),
+              a(href := routes.Auth.passwordReset)(trans.site.passwordReset())
             )
-          ),
-          div(cls := "alternative")(
-            a(href := addReferrer(langHref(routes.Auth.signup)))(trans.site.signUp()),
-            a(href := routes.Auth.passwordReset)(trans.site.passwordReset()),
-            a(href := routes.Auth.magicLink)("Log in by email")
           )
         )
 

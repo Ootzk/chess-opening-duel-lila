@@ -28,11 +28,13 @@ final class Lobby(env: Env) extends LilaController(env):
     )
 
   private def serveHtmlHome(using ctx: Context) =
-    env
-      .pageCache: () =>
-        keyPages.homeHtml.map: html =>
-          Ok(html).withCanonical("").noCache
-      .map(env.security.lilaCookie.ensure(ctx.req))
+    if ctx.isAnon then Redirect(routes.Auth.login).toFuccess
+    else
+      env
+        .pageCache: () =>
+          keyPages.homeHtml.map: html =>
+            Ok(html).withCanonical("").noCache
+        .map(env.security.lilaCookie.ensure(ctx.req))
 
   def homeLang(lang: Language) =
     staticRedirect(lang.value).map(Action.async(_)).getOrElse(LangPage("/")(serveHtmlHome)(lang))
