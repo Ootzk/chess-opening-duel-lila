@@ -562,6 +562,7 @@ POST  /account/preferences/notification       controllers.Pref.notifyFormApply
 POST  /setup/ai                        controllers.Setup.ai
 POST  /setup/friend                    controllers.Setup.friend(user: Option[UserStr] ?= None)
 POST  /setup/openingDuel               controllers.Setup.openingDuel(user: Option[UserStr] ?= None)
+POST  /setup/openingDuelAi            controllers.Setup.openingDuelAi
 POST  /setup/hook/:sri/like/:gameId    controllers.Setup.like(sri: Sri, gameId: GameId)
 POST  /setup/hook/:sri                 controllers.Setup.hook(sri: Sri)
 GET   /setup/filter                    controllers.Setup.filterForm

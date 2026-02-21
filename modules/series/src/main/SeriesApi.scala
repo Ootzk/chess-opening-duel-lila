@@ -45,6 +45,24 @@ final class SeriesApi(
       Bus.pub(SeriesCreated(s))
       s
 
+  def createAi(
+      humanId: UserId,
+      aiLevel: Int,
+      variant: chess.variant.Variant,
+      clock: ClockConfig
+  ): Fu[Series] =
+    val aiUserId = UserId("stockfish")
+    val s = Series.make(humanId, aiUserId, variant, clock, aiLevel = Some(aiLevel))
+    repo.insert(s).flatMap: _ =>
+      Bus.pub(SeriesCreated(s))
+      // AI auto-pick: random 5 from default pool
+      val aiPicks = scala.util.Random.shuffle(OpeningPresets.all.toList).take(Series.maxPicks)
+      val aiOpenings = aiPicks.map(preset => SeriesOpening.makePick(preset, s.aiPlayerIndex))
+      for
+        _ <- repo.replacePlayerOpenings(s.id, s.aiPlayerIndex, OpeningSource.Pick, aiOpenings)
+        _ <- repo.setConfirmedPicks(s.id, s.aiPlayerIndex, true)
+      yield s
+
   def byId(id: SeriesId): Fu[Option[Series]] = repo.byId(id)
 
   def byGameId(gameId: GameId): Fu[Option[Series]] = repo.byGameId(gameId)
@@ -339,6 +357,8 @@ final class SeriesApi(
           triggerGameStart(withGame.id, game.id)
         _ = gameStartSchedules.put(withGame.id, cancellable)
         _ = readyPlayers.remove(withGame.id)
+        // AI auto-ready for RandomSelecting
+        _ = if withGame.isAi then readyPlayers.put(withGame.id, Set(withGame.aiPlayerIndex))
       yield
         oldGameId match
           case None      => Bus.pub(SeriesPhaseChanged(withGame))
@@ -396,9 +416,12 @@ final class SeriesApi(
             // 모든 게임 종료 → Resting phase 진입 (DC 포함)
             // Playing 중 series WS에 미연결이므로 lastSeenAt 리셋 필수
             val resting = updated.updatePlayers(p => p.clearNext.updateLastSeen).setPhase(Series.Phase.Resting)
-            repo.update(resting).map: _ =>
+            repo.update(resting).flatMap: _ =>
               Bus.pub(SeriesPhaseChanged(resting))
               Bus.pub(SeriesEnterResting(resting, gameId))
+              // AI auto-confirm next game
+              if resting.isAi then repo.setConfirmedNext(resting.id, resting.aiPlayerIndex, true)
+              else funit
 
   // ===== Resting Phase: Next Game 확인 =====
 
@@ -487,7 +510,11 @@ final class SeriesApi(
                     startRandomGame(s, allRemaining, Some(oldGameId))
                 else
                   val selecting = s.setPhase(Series.Phase.Selecting)
-                  repo.update(selecting).foreach(_ => Bus.pub(SeriesEnterSelecting(selecting, oldGameId)))
+                  repo.update(selecting).foreach: _ =>
+                    Bus.pub(SeriesEnterSelecting(selecting, oldGameId))
+                    // AI auto-select if AI is the loser
+                    if selecting.isAi && loserIdx == selecting.aiPlayerIndex then
+                      aiAutoSelect(selecting)
       case _ => ()
 
   def serverTimeoutResting(s: Series): Fu[Option[Series]] =
@@ -887,8 +914,10 @@ final class SeriesApi(
     val whiteIdx = s.whitePlayerForOpening(opening)
     val blackIdx = 1 - whiteIdx
     for
-      whiteUser <- userApi.byIdWithPerf(s.player(whiteIdx).userId, s.perfType)
-      blackUser <- userApi.byIdWithPerf(s.player(blackIdx).userId, s.perfType)
+      whiteUser <- if s.isAi && whiteIdx == s.aiPlayerIndex then fuccess(None)
+                   else userApi.byIdWithPerf(s.player(whiteIdx).userId, s.perfType)
+      blackUser <- if s.isAi && blackIdx == s.aiPlayerIndex then fuccess(None)
+                   else userApi.byIdWithPerf(s.player(blackIdx).userId, s.perfType)
       game <- makeGame(s, whiteUser, blackUser, opening.fen)
       _ <- gameRepo.insertDenormalized(game, Some(opening.fen))
     yield game
@@ -918,7 +947,9 @@ final class SeriesApi(
         .newGame(
           chess = chessGame,
           players = ByColor: color =>
-            lila.game.Player.make(color, if color.white then whiteUser else blackUser)
+            val user = if color.white then whiteUser else blackUser
+            if user.isEmpty && s.isAi then lila.game.Player.makeAnon(color, s.aiLevel)
+            else lila.game.Player.make(color, user)
           ,
           rated = chess.Rated.No,
           source = lila.core.game.Source.Series,
@@ -955,6 +986,11 @@ final class SeriesApi(
           case None => fuccess(None)
           case Some(idx) =>
             if !s.isFinished then fuccess(None)
+            else if s.isAi then
+              // AI series: instant new series creation (no offer/accept flow)
+              createAi(s.player(0).userId, s.aiLevel.get, s.variant, s.clock).map: newSeries =>
+                socket.foreach(_.notifyRematchTaken(seriesId, newSeries.id))
+                Some(newSeries.id)
             else if s.rematchOfferedBy.exists(_ != idx) then
               // Opponent already offered -> accept: create new series with random player order
               val (p0, p1) =
@@ -971,6 +1007,45 @@ final class SeriesApi(
               repo.update(updated).map: _ =>
                 socket.foreach(_.notifyRematchOffer(seriesId, idx))
                 None
+
+  // ===== AI Auto-Decisions =====
+
+  /** AI auto-ban: randomly ban 2 from human's picks when entering Banning phase */
+  private[series] def aiAutoBan(seriesId: SeriesId): Funit =
+    repo.byId(seriesId).flatMap:
+      case Some(s) if s.isAi && s.phase == Series.Phase.Banning =>
+        val aiIdx = s.aiPlayerIndex
+        val humanPicks = s.picks(1 - aiIdx)
+        val banTargets = scala.util.Random.shuffle(humanPicks).take(Series.maxBans)
+        val bans = banTargets.map(p => SeriesOpening.makeBan(p.toPreset, aiIdx))
+        for
+          _ <- repo.replacePlayerOpenings(seriesId, aiIdx, OpeningSource.Ban, bans)
+          _ <- repo.setConfirmedBans(seriesId, aiIdx, true)
+        yield
+          socketNotifyConfirmed(seriesId, aiIdx, "bans")
+          // Check if both confirmed (human might have confirmed already)
+          repo.byId(seriesId).foreach:
+            case Some(updated) if updated.bothBansConfirmed =>
+              val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+                confirmDelaySchedules.remove(seriesId)
+                startGame1Delayed(seriesId)
+              confirmDelaySchedules.put(seriesId, cancellable)
+            case _ => ()
+      case _ => funit
+
+  /** AI auto-select: randomly pick from remaining openings when AI is the loser */
+  private def aiAutoSelect(s: Series): Unit =
+    val aiIdx = s.aiPlayerIndex
+    val remaining = s.remainingPicks(aiIdx)
+    if remaining.nonEmpty then
+      val picked = scala.util.Random.shuffle(remaining).head
+      socket.foreach(_.notifySelectingPick(s.id, Some(picked.name)))
+      repo.setConfirmedSelecting(s.id, aiIdx, true, Some(picked.name)).foreach: _ =>
+        socketNotifyConfirmed(s.id, aiIdx, "selecting")
+        val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
+          confirmDelaySchedules.remove(s.id)
+          startSelectingDelayed(s.id)
+        confirmDelaySchedules.put(s.id, cancellable)
 
 // Events
 case class SeriesCreated(s: Series)

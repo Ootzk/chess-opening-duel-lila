@@ -61,6 +61,7 @@ export interface SeriesData {
   winner?: number; // 0 or 1
   rematchOfferedBy?: number; // 0 or 1
   forfeitBy?: number; // 0 or 1 (player who forfeited/disconnected)
+  aiLevel?: number; // AI opponent Stockfish level (1-8)
 }
 
 export interface PickConfig {

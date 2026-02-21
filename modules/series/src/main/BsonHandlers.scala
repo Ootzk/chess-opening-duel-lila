@@ -205,7 +205,8 @@ object BsonHandlers:
         createdAt = r.get[Instant]("ca"),
         finishedAt = r.getO[Instant]("fa"),
         forfeitBy = r.getO[Int]("fb"),
-        rematchOfferedBy = r.getO[Int]("ro")
+        rematchOfferedBy = r.getO[Int]("ro"),
+        aiLevel = r.getO[Int]("al")
       )
 
     def writes(w: BSON.Writer, s: Series) = $doc(
@@ -222,5 +223,6 @@ object BsonHandlers:
       "ca" -> s.createdAt,
       "fa" -> s.finishedAt,
       "fb" -> s.forfeitBy,
-      "ro" -> s.rematchOfferedBy
+      "ro" -> s.rematchOfferedBy,
+      "al" -> s.aiLevel
     )

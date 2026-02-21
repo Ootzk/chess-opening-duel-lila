@@ -142,6 +142,28 @@ final class Setup(
             yield result
         )
 
+  def openingDuelAi = AuthBody { ctx ?=> me ?=>
+    limit.setupPost(ctx.ip, rateLimited):
+      bindForm(forms.ai)(
+        doubleJsonFormError,
+        config =>
+          config.makeClock match
+            case None =>
+              negotiate(
+                Redirect(routes.Lobby.home),
+                JsonBadRequest("Clock is required for Opening Duel")
+              )
+            case Some(clock) =>
+              env.series.api
+                .createAi(me.userId, config.level, chess.variant.Standard, clock)
+                .flatMap: series =>
+                  negotiate(
+                    Redirect(routes.Series.pickPage(series.id)),
+                    JsonOk(Json.obj("ok" -> true, "id" -> series.id.value))
+                  )
+      )
+  }
+
   private def hookResponse(res: HookResult) = res match
     case HookResult.Created(id) =>
       JsonOk:

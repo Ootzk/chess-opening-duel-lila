@@ -49,6 +49,7 @@ export default class SetupController {
       hook: this.makeSetupStore('hook'),
       friend: this.makeSetupStore('friend'),
       openingDuel: this.makeSetupStore('openingDuel'),
+      openingDuelAi: this.makeSetupStore('openingDuelAi'),
       ai: this.makeSetupStore('ai'),
     };
   }
@@ -60,7 +61,7 @@ export default class SetupController {
     storedJsonProp<SetupStore>(this.storeKey(gameType), () => ({
       variant: 'standard',
       fen: '',
-      timeMode: gameType === 'hook' ? 'realTime' : 'unlimited',
+      timeMode: gameType === 'hook' || gameType === 'openingDuelAi' ? 'realTime' : 'unlimited',
       time: 5,
       increment: 3,
       days: 2,
@@ -285,7 +286,8 @@ export default class SetupController {
     return true;
   };
 
-  minimumTimeIfReal = (): number => (this.gameType === 'ai' && this.variant() === 'fromPosition' ? 1 : 0);
+  minimumTimeIfReal = (): number =>
+    (this.gameType === 'ai' || this.gameType === 'openingDuelAi') && this.variant() === 'fromPosition' ? 1 : 0;
 
   submit = async () => {
     const color = this.color();

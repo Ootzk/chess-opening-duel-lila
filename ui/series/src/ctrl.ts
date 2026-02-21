@@ -122,6 +122,13 @@ export default class SeriesPickCtrl {
         const match = this.availableOpenings.find(o => o.name === savedPick);
         this.selectedSelectingPick.add(match ? openingKey(match) : openingKey({ name: savedPick }));
       }
+    } else if (this.isSelecting && !this.isMyTurnToSelect) {
+      this.opponentConfirmed = this.series.players[oppIndex].confirmedSelecting;
+      // Load opponent's selectingPick (for AI auto-select or late page loads)
+      const oppSelectingPick = this.series.players[oppIndex].selectingPick;
+      if (oppSelectingPick) {
+        this.opponentSelectingPick = oppSelectingPick;
+      }
     }
 
     // Load opponent online status
@@ -239,6 +246,10 @@ export default class SeriesPickCtrl {
     } catch (e) {
       console.error('Error selecting random opening:', e);
     }
+  }
+
+  get isAi(): boolean {
+    return !!this.series.aiLevel;
   }
 
   get isPicking(): boolean {
@@ -557,6 +568,7 @@ export default class SeriesPickCtrl {
 
   /** Handle gone event - player connected/disconnected */
   handleGone(data: { player: number; gone: boolean }): void {
+    if (this.isAi) return; // AI never disconnects
     const povIndex = this.series.povIndex ?? 0;
     if (data.player !== povIndex) {
       this.opponentOnline = !data.gone;

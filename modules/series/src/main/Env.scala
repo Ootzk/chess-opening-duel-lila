@@ -59,6 +59,7 @@ final class Env(
       s.phase match
         case Series.Phase.Banning =>
           timeouts.schedule(s.id) // Reschedule for Banning phase
+          if s.isAi then api.aiAutoBan(s.id) // AI auto-ban
         case Series.Phase.Resting =>
           timeouts.schedule(s.id) // Schedule timeout for Resting phase (auto-transition)
         case Series.Phase.RandomSelecting | Series.Phase.Playing | Series.Phase.Finished =>
@@ -93,7 +94,11 @@ final class Env(
         // Aborted game: winner is the player who was NOT supposed to move
         val effectiveWinnerId =
           if game.status == chess.Status.Aborted then game.player(!game.turnColor).userId
-          else game.winnerUserId
+          else game.winnerUserId.orElse:
+            // AI player has no userId — detect via winnerColor + isAi
+            game.winnerColor.flatMap: color =>
+              if game.player(color).isAi then Some(UserId("stockfish"))
+              else None
         api.finishGame(seriesId, game.id, effectiveWinnerId)
 
   // When a series game finishes but series continues (Game 1 only)

@@ -20,8 +20,14 @@ case class Series(
     createdAt: Instant,
     finishedAt: Option[Instant] = None,
     forfeitBy: Option[Int] = None,
-    rematchOfferedBy: Option[Int] = None
+    rematchOfferedBy: Option[Int] = None,
+    aiLevel: Option[Int] = None
 ):
+  // ===== AI =====
+
+  def isAi: Boolean      = aiLevel.isDefined
+  def aiPlayerIndex: Int = 1 // AI는 항상 player1
+
   // ===== 플레이어 접근 =====
 
   def player(index: Int): SeriesPlayer =
@@ -253,7 +259,8 @@ object Series:
       player0: UserId,
       player1: UserId,
       variant: chess.variant.Variant,
-      clock: ClockConfig
+      clock: ClockConfig,
+      aiLevel: Option[Int] = None
   ): Series =
     val now = nowInstant
     Series(
@@ -270,5 +277,6 @@ object Series:
       variant = variant,
       clock = clock,
       createdAt = now,
-      finishedAt = None
+      finishedAt = None,
+      aiLevel = aiLevel
     )

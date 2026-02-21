@@ -38,8 +38,8 @@ final class SeriesJson(
           "bestOf" -> Series.bestOf,
           "round" -> s.currentRound,
           "players" -> Json.arr(
-            playerJson(s.players._1, user0),
-            playerJson(s.players._2, user1)
+            playerJson(s.players._1, user0, s),
+            playerJson(s.players._2, user1, s)
           ),
           "openings" -> visibleOpenings.map(openingJson),
           "games" -> s.games.map(gameJson),
@@ -55,6 +55,7 @@ final class SeriesJson(
         })
         .add("rematchOfferedBy" -> s.rematchOfferedBy)
         .add("forfeitBy" -> s.forfeitBy)
+        .add("aiLevel" -> s.aiLevel)
 
   def roundInfo(s: Series): JsObject =
     Json.obj(
@@ -64,7 +65,7 @@ final class SeriesJson(
       "scores" -> Json.arr(s.players._1.displayScore, s.players._2.displayScore)
     )
 
-  private def playerJson(p: SeriesPlayer, user: Option[LightUser]): JsObject =
+  private def playerJson(p: SeriesPlayer, user: Option[LightUser], series: Series): JsObject =
     Json.obj(
       "index" -> p.index,
       "score" -> p.displayScore,
@@ -78,7 +79,12 @@ final class SeriesJson(
       Json.obj("id" -> u.id, "name" -> u.name)
         .add("title" -> u.title.map(_.value))
         .add("flair" -> u.flair)
+    ).orElse(
+      // AI player: synthetic user info
+      series.aiLevel.filter(_ => p.index == series.aiPlayerIndex).map: level =>
+        Json.obj("id" -> "stockfish", "name" -> s"Stockfish level $level")
     ))
+    .add("ai" -> series.aiLevel.filter(_ => p.index == series.aiPlayerIndex))
 
   private def openingJson(o: SeriesOpening): JsObject = Json.obj(
     "id" -> o.id.value,

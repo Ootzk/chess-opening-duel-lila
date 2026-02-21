@@ -40,6 +40,12 @@ export default function table(ctrl: LobbyController) {
         that someone nearby can scan.`,
     },
     {
+      gameType: 'openingDuelAi',
+      label: 'Opening Duel with Computer',
+      disabled: hasOngoingRealTimeGame,
+      title: 'Play a best-of-5 opening duel against Stockfish.',
+    },
+    {
       gameType: 'ai',
       label: i18n.site.playAgainstComputer,
       disabled: hasOngoingRealTimeGame,
