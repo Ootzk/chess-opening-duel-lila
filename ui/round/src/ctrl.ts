@@ -140,6 +140,7 @@ export default class RoundController implements MoveRootCtrl {
     if (!d.local) this.transientMove = new TransientMove(this.socket);
     this.server = new Server(() => this.data);
 
+
     // Initialize series resting state from page data (for page refresh)
     if (d.series?.resting) {
       this.seriesResting = true;
@@ -869,12 +870,11 @@ export default class RoundController implements MoveRootCtrl {
     this.seriesNextCountdown = 3;
     clearInterval(this.seriesCountdownInterval);
     this.seriesCountdownInterval = setInterval(() => {
-      if (this.seriesNextCountdown > 0) {
-        this.seriesNextCountdown--;
-        this.redraw();
-      } else {
+      this.seriesNextCountdown--;
+      if (this.seriesNextCountdown < 0) {
         clearInterval(this.seriesCountdownInterval);
       }
+      this.redraw();
     }, 1000) as unknown as number;
   };
 

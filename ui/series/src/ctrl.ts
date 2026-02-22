@@ -66,14 +66,47 @@ export default class SeriesPickCtrl {
 
     // Initialize selections and confirmed state from series data
     this.initFromSeries();
+    this.preloadSounds();
 
     // NOTE: Don't start timers here - call init() after vnode is set up
+  }
+
+  private preloadSounds(): void {
+    // Selection sound (piano theme)
+    site.sound.load('series.select', site.sound.url('piano/Move.mp3'));
+
+    // Confirm sound
+    site.sound.load('series.confirm', site.sound.url('piano/Confirmation.mp3'));
+
+    // 3s pick/ban/selecting countdown (piano)
+    for (let i = 0; i <= 3; i++) site.sound.load(`series.piano.cd${i}`, site.sound.url(`piano/CountDown${i}.mp3`));
+
+    // Roulette
+    site.sound.load('series.roulette', site.sound.url('sfx/Tournament1st.mp3'));
+
+    // RandomSelecting / Selecting showcase countdown (sfx)
+    for (let i = 0; i <= 5; i++) site.sound.load(`series.sfx.cd${i}`, site.sound.url(`sfx/CountDown${i}.mp3`));
+
+    // Finished page
+    site.sound.load('series.victory', site.sound.url('other/gewonnen.mp3'));
+    site.sound.load('series.draw', site.sound.url('woodland/Draw.mp3'));
+    site.sound.load('series.defeat', site.sound.url('woodland/Defeat.mp3'));
+  }
+
+  private playFinishedSound(): void {
+    const povIndex = this.series.povIndex;
+    if (povIndex === undefined) return;
+    const winnerIdx = this.series.winner;
+    if (winnerIdx == null) site.sound.play('series.draw');
+    else if (winnerIdx === povIndex) site.sound.play('series.victory');
+    else site.sound.play('series.defeat');
   }
 
   // Call this after vnode initialization in series.pick.ts
   init(): void {
     if (this.isFinished) {
       // No timers needed for finished page
+      this.playFinishedSound();
       return;
     } else if (this.isRandomSelecting) {
       this.startRandomSelecting();
@@ -284,10 +317,13 @@ export default class SeriesPickCtrl {
     if (this.countdownActive) return;
     this.countdownActive = true;
     this.countdownSeconds = 3;
+    site.sound.play('series.piano.cd3');
     this.countdownInterval = window.setInterval(() => {
       this.countdownSeconds--;
-      if (this.countdownSeconds <= 0) {
+      if (this.countdownSeconds < 0) {
         this.stopCountdown();
+      } else {
+        site.sound.play(`series.piano.cd${this.countdownSeconds}`);
       }
       this.redraw();
     }, 1000);
@@ -388,6 +424,7 @@ export default class SeriesPickCtrl {
         selections.clear();
       }
       selections.add(name);
+      site.sound.play('series.select');
     }
 
     this.sendSelections();
@@ -454,6 +491,7 @@ export default class SeriesPickCtrl {
           this.myConfirmed = data.confirmedSelecting ?? true;
           // Start 3s countdown — WS "phase" event triggers redirect when server creates game
           if (this.myConfirmed) {
+            site.sound.play('series.confirm');
             this.startCountdown();
           }
         }
@@ -495,6 +533,7 @@ export default class SeriesPickCtrl {
             return;
           }
         }
+        if (this.myConfirmed) site.sound.play('series.confirm');
         // Both confirmed → start 3s countdown
         if (this.isBothConfirmed && !this.countdownActive) {
           this.startCountdown();
@@ -555,14 +594,23 @@ export default class SeriesPickCtrl {
       this.showSelectingShowcase(data.gameId);
       return;
     }
-    if (data.phase === PhaseId.Finished) {
-      window.location.href = `/series/${this.seriesId}/finished`;
-    } else if (data.phase === PhaseId.Playing && data.gameId) {
-      window.location.href = `/${data.gameId}`;
-    } else if (data.phase === PhaseId.RandomSelecting) {
-      window.location.href = `/series/${this.seriesId}/random-selecting`;
-    } else if (data.phase !== this.phase) {
-      window.location.reload();
+    const navigate = () => {
+      if (data.phase === PhaseId.Finished) {
+        window.location.href = `/series/${this.seriesId}/finished`;
+      } else if (data.phase === PhaseId.Playing && data.gameId) {
+        window.location.href = `/${data.gameId}`;
+      } else if (data.phase === PhaseId.RandomSelecting) {
+        window.location.href = `/series/${this.seriesId}/random-selecting`;
+      } else if (data.phase !== this.phase) {
+        window.location.reload();
+      }
+    };
+    // Delay redirect to let cd0 finish playing
+    if (this.countdownActive) {
+      this.stopCountdown();
+      setTimeout(navigate, 1000);
+    } else {
+      navigate();
     }
   }
 
@@ -833,6 +881,7 @@ export default class SeriesPickCtrl {
     for (let i = 0; i <= targetIdx; i++) sequence.push(i);
 
     let step = 0;
+    site.sound.play('series.roulette');
 
     const animate = () => {
       if (step >= sequence.length) {
@@ -855,6 +904,7 @@ export default class SeriesPickCtrl {
   }
 
   private startRandomSelectingCountdown(): void {
+    site.sound.play(`series.sfx.cd${this.randomSelectingCountdown}`);
     this.timerInterval = window.setInterval(() => {
       this.randomSelectingCountdown--;
       if (this.randomSelectingCountdown <= 0) {
@@ -862,9 +912,11 @@ export default class SeriesPickCtrl {
           clearInterval(this.timerInterval);
         }
         this.randomSelectingCountdown = 0;
+        site.sound.play('series.sfx.cd0');
         this.redraw();
-        this.startGame();
+        setTimeout(() => this.startGame(), 1000);
       } else {
+        site.sound.play(`series.sfx.cd${this.randomSelectingCountdown}`);
         this.redraw();
       }
     }, 1000);
@@ -895,11 +947,15 @@ export default class SeriesPickCtrl {
     // 5-second countdown
     this.showcaseCountdown = 5;
     this.redraw();
+    site.sound.play('series.sfx.cd5');
     const interval = window.setInterval(() => {
       this.showcaseCountdown--;
       if (this.showcaseCountdown <= 0) {
         clearInterval(interval);
-        this.startGameWithId(gameId);
+        site.sound.play('series.sfx.cd0');
+        setTimeout(() => this.startGameWithId(gameId), 1000);
+      } else {
+        site.sound.play(`series.sfx.cd${this.showcaseCountdown}`);
       }
       this.redraw();
     }, 1000);
