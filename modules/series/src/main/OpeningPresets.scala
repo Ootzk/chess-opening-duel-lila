@@ -10,15 +10,9 @@ object OpeningPresets:
     s"/opening/${name.replace(": ", "_").replace(" ", "_")}"
 
   // 10개 오프닝 프리셋 (Opening Explorer API에서 ECO 코드 확인됨)
+  // 순서: 백흑백흑백 / 흑백흑백흑 (CSS Grid 5열 × 2행)
   val all: Vector[OpeningPreset] = Vector(
-    // C89 - Ruy Lopez: Marshall Attack
-    // 1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Ba4 Nf6 5.O-O Be7 6.Re1 b5 7.Bb3 O-O 8.c3 d5
-    OpeningPreset(
-      "Ruy Lopez: Marshall Attack",
-      Fen.Full("r1bq1rk1/2p1bppp/p1n2n2/1p1pp3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - - 0 9"),
-      nameToUrl("Ruy Lopez: Marshall Attack"),
-      chess.Color.Black
-    ),
+    // === Row 1: W B W B W ===
     // C54 - Italian Game: Classical Variation, Giuoco Pianissimo
     // 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.c3 Nf6 5.d3 d6 6.O-O O-O 7.Nbd2
     OpeningPreset(
@@ -27,28 +21,20 @@ object OpeningPresets:
       nameToUrl("Italian Game: Classical Variation, Giuoco Pianissimo"),
       chess.Color.White
     ),
+    // C89 - Ruy Lopez: Marshall Attack
+    // 1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Ba4 Nf6 5.O-O Be7 6.Re1 b5 7.Bb3 O-O 8.c3 d5
+    OpeningPreset(
+      "Ruy Lopez: Marshall Attack",
+      Fen.Full("r1bq1rk1/2p1bppp/p1n2n2/1p1pp3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - - 0 9"),
+      nameToUrl("Ruy Lopez: Marshall Attack"),
+      chess.Color.Black
+    ),
     // D35 - Queen's Gambit Declined: Normal Defense
     // 1.d4 d5 2.c4 e6 3.Nc3 Nf6
     OpeningPreset(
       "Queen's Gambit Declined: Normal Defense",
       Fen.Full("rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4"),
       nameToUrl("Queen's Gambit Declined: Normal Defense"),
-      chess.Color.White
-    ),
-    // E05 - Catalan Opening: Open Defense, Classical Line
-    // 1.d4 Nf6 2.c4 e6 3.g3 d5 4.Bg2 Be7 5.Nf3 O-O 6.O-O dxc4
-    OpeningPreset(
-      "Catalan Opening: Open Defense, Classical Line",
-      Fen.Full("rnbq1rk1/ppp1bppp/4pn2/8/2pP4/5NP1/PP2PPBP/RNBQ1RK1 w - - 0 7"),
-      nameToUrl("Catalan Opening: Open Defense, Classical Line"),
-      chess.Color.White
-    ),
-    // A22 - English Opening: King's English Variation, Two Knights Variation
-    // 1.c4 e5 2.Nc3 Nf6
-    OpeningPreset(
-      "English Opening: King's English Variation, Two Knights Variation",
-      Fen.Full("rnbqkb1r/pppp1ppp/5n2/4p3/2P5/2N5/PP1PPPPP/R1BQKBNR w KQkq - 2 3"),
-      nameToUrl("English Opening: King's English Variation, Two Knights Variation"),
       chess.Color.White
     ),
     // B90 - Sicilian Defense: Najdorf Variation
@@ -59,6 +45,15 @@ object OpeningPresets:
       nameToUrl("Sicilian Defense: Najdorf Variation"),
       chess.Color.Black
     ),
+    // E05 - Catalan Opening: Open Defense, Classical Line
+    // 1.d4 Nf6 2.c4 e6 3.g3 d5 4.Bg2 Be7 5.Nf3 O-O 6.O-O dxc4
+    OpeningPreset(
+      "Catalan Opening: Open Defense, Classical Line",
+      Fen.Full("rnbq1rk1/ppp1bppp/4pn2/8/2pP4/5NP1/PP2PPBP/RNBQ1RK1 w - - 0 7"),
+      nameToUrl("Catalan Opening: Open Defense, Classical Line"),
+      chess.Color.White
+    ),
+    // === Row 2: B W B W B ===
     // E20 - Nimzo-Indian Defense
     // 1.d4 Nf6 2.c4 e6 3.Nc3 Bb4
     OpeningPreset(
@@ -67,13 +62,13 @@ object OpeningPresets:
       nameToUrl("Nimzo-Indian Defense"),
       chess.Color.Black
     ),
-    // A56 - Benoni Defense
-    // 1.d4 Nf6 2.c4 c5
+    // C45 - Scotch Game
+    // 1.e4 e5 2.Nf3 Nc6 3.d4 exd4 4.Nxd4
     OpeningPreset(
-      "Benoni Defense",
-      Fen.Full("rnbqkb1r/pp1ppppp/5n2/2p5/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3"),
-      nameToUrl("Benoni Defense"),
-      chess.Color.Black
+      "Scotch Game",
+      Fen.Full("r1bqkbnr/pppp1ppp/2n5/8/3NP3/8/PPP2PPP/RNBQKB1R b KQkq - 0 4"),
+      nameToUrl("Scotch Game"),
+      chess.Color.White
     ),
     // B19 - Caro-Kann Defense: Classical Variation
     // 1.e4 c6 2.d4 d5 3.Nc3 dxe4 4.Nxe4 Bf5 5.Ng3 Bg6 6.h4 h6 7.Nf3 Nd7
@@ -82,6 +77,14 @@ object OpeningPresets:
       Fen.Full("r2qkbnr/pp1nppp1/2p3bp/8/3P3P/5NN1/PPP2PP1/R1BQKB1R w KQkq - 2 8"),
       nameToUrl("Caro-Kann Defense: Classical Variation"),
       chess.Color.Black
+    ),
+    // A22 - English Opening: King's English Variation, Two Knights Variation
+    // 1.c4 e5 2.Nc3 Nf6
+    OpeningPreset(
+      "English Opening: King's English Variation, Two Knights Variation",
+      Fen.Full("rnbqkb1r/pppp1ppp/5n2/4p3/2P5/2N5/PP1PPPPP/R1BQKBNR w KQkq - 2 3"),
+      nameToUrl("English Opening: King's English Variation, Two Knights Variation"),
+      chess.Color.White
     ),
     // C18 - French Defense: Winawer Variation
     // 1.e4 e6 2.d4 d5 3.Nc3 Bb4 4.e5 c5 5.a3 Bxc3+ 6.bxc3
