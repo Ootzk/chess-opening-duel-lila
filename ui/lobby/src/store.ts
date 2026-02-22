@@ -20,8 +20,8 @@ interface Config<A> {
 const tab: Config<Tab> = {
   key: 'lobby.tab',
   fix(t: string | null): Tab {
-    if (<Tab>t) return t as Tab;
-    return 'pools';
+    if (t === 'real_time' || t === 'now_playing' || t === 'how_to_play') return t as Tab;
+    return 'how_to_play';
   },
 };
 const mode: Config<Mode> = {
