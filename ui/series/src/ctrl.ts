@@ -774,7 +774,7 @@ export default class SeriesPickCtrl {
     } else if (this.isBanning) {
       return `Confirm (${count}/${max})`;
     } else if (this.isSelecting) {
-      return count > 0 ? 'Confirm' : 'Select an Opening';
+      return count > 0 ? 'Confirm' : 'Select';
     }
     return 'Confirm';
   }
