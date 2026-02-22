@@ -362,11 +362,22 @@ final class Series(env: Env) extends LilaController(env):
   def forfeit(id: SeriesId) = Auth { ctx ?=> me ?=>
     Found(api.byId(id)): s =>
       if !isPlayer(s, me.userId) then
-        JsonBadRequest(jsonError("Not a player of this series"))
+        negotiate(
+          Redirect(routes.Lobby.home),
+          JsonBadRequest(jsonError("Not a player of this series"))
+        )
       else
-        api.forfeitSeries(id, me.userId).map:
-          case Some(_) => JsonOk(Json.obj("ok" -> true))
-          case None => JsonBadRequest(jsonError("Cannot forfeit"))
+        api.forfeitSeries(id, me.userId).flatMap:
+          case Some(_) =>
+            negotiate(
+              Redirect(routes.Lobby.home),
+              JsonOk(Json.obj("ok" -> true))
+            )
+          case None =>
+            negotiate(
+              Redirect(routes.Lobby.home),
+              JsonBadRequest(jsonError("Cannot forfeit"))
+            )
   }
 
   // Selecting 타임아웃 시 랜덤 선택 (패자용)
