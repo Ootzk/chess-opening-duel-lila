@@ -31,6 +31,9 @@ export default class SeriesPickCtrl {
   countdownSeconds: number = 3;
   countdownInterval?: number;
 
+  // Phase transition navigation guard — prevents WS events from re-triggering state changes
+  private navigating: boolean = false;
+
   // RandomSelecting phase state
   selectedOpening: SeriesOpening | null = null;
   randomSelectingCountdown: number = 5;
@@ -336,7 +339,9 @@ export default class SeriesPickCtrl {
       this.countdownInterval = undefined;
     }
     this.countdownActive = false;
-    this.countdownSeconds = 3;
+    // Don't reset countdownSeconds here — startCountdown() handles initialization.
+    // Resetting to 3 caused a brief "3" flash when the countdown self-stopped
+    // and a WS event re-triggered startCountdown() before navigation completed.
   }
 
   // Selecting phase: 상대가 선택 중인지 (내가 패자인지)
@@ -550,11 +555,13 @@ export default class SeriesPickCtrl {
 
   /** Handle reload event - fetch fresh state from server */
   handleReload(): void {
+    if (this.navigating) return;
     this.fetchState();
   }
 
   /** Handle confirmed event - opponent confirmed or cancelled their picks/bans/selecting */
   handleConfirmed(data: { player: number; phase: string; confirmed?: boolean }): void {
+    if (this.navigating) return;
     const povIndex = this.series.povIndex ?? 0;
     if (data.player !== povIndex) {
       this.opponentConfirmed = data.confirmed !== false;
@@ -589,11 +596,16 @@ export default class SeriesPickCtrl {
   /** Handle phase event - phase changed */
   handlePhase(data: { phase: number; gameId?: string }): void {
     console.log('[series] WS phase event:', data);
+    if (this.navigating) return; // Already navigating — ignore subsequent events
+
     // Selecting → Playing: show showcase before redirecting
     if (this.isSelecting && data.phase === PhaseId.Playing && data.gameId) {
       this.showSelectingShowcase(data.gameId);
       return;
     }
+
+    this.navigating = true; // Block further WS event processing during navigation
+
     const navigate = () => {
       if (data.phase === PhaseId.Finished) {
         window.location.href = `/series/${this.seriesId}/finished`;
@@ -605,6 +617,13 @@ export default class SeriesPickCtrl {
         window.location.reload();
       }
     };
+
+    // Stop phase timer to prevent unnecessary redraws during navigate delay
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = undefined;
+    }
+
     // Delay redirect to let cd0 finish playing
     if (this.countdownActive) {
       this.stopCountdown();
