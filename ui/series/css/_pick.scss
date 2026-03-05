@@ -521,6 +521,7 @@
     background: $c-bg-box;
     @extend %box-radius;
     padding: $block-gap;
+    overflow-x: auto;
 
     .series-score__table {
       width: 100%;
