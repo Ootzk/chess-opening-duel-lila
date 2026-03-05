@@ -14,11 +14,16 @@ import lila.core.net.Crawler
 
 final private class OpeningExplorer(
     ws: StandaloneWSClient,
-    explorerEndpoint: String @@ ExplorerEndpoint
+    explorerEndpoint: String @@ ExplorerEndpoint,
+    explorerToken: Option[String @@ ExplorerToken]
 )(using Scheduler, Executor):
   import OpeningExplorer.*
 
   private val requestTimeout = 4.seconds
+
+  private def explorerRequest(path: String) =
+    val req = ws.url(s"$explorerEndpoint$path")
+    explorerToken.fold(req)(t => req.withHttpHeaders("Authorization" -> s"Bearer $t"))
 
   private val anonStatsReqCounter = PeriodicCounter(1.minute)
   private val maxAnonStatsPerMinute = 200
@@ -31,7 +36,7 @@ final private class OpeningExplorer(
     if me.isEmpty && anonStatsReqCounter.get > maxAnonStatsPerMinute
     then fuccess(Failure(AnonRateLimit))
     else
-      ws.url(s"$explorerEndpoint/lichess")
+      explorerRequest("/lichess")
         .withQueryStringParameters(
           "since" -> OpeningQuery.firstMonth,
           "play" -> play.map(_.uci).mkString(","),
@@ -62,7 +67,7 @@ final private class OpeningExplorer(
             Failure(e)
 
   private[opening] def statsByFen(fen: chess.format.Fen.Full): Fu[Option[Stats]] =
-    ws.url(s"$explorerEndpoint/lichess")
+    explorerRequest("/lichess")
       .withQueryStringParameters(
         "fen"         -> fen.value,
         "since"       -> OpeningQuery.firstMonth,
@@ -93,7 +98,7 @@ final private class OpeningExplorer(
           none
 
   private[opening] def simplePopularity(opening: Opening): Fu[Option[Long]] =
-    ws.url(s"$explorerEndpoint/lichess")
+    explorerRequest("/lichess")
       .withQueryStringParameters(
         "since" -> OpeningQuery.firstMonth,
         "play" -> opening.uci.value.replace(" ", ","),

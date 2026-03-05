@@ -1,6 +1,7 @@
 package lila.opening
 
 import play.api.mvc.RequestHeader
+import scala.util.{ Failure, Success }
 
 import lila.core.game.{ GameRepo, PgnDump }
 import lila.core.net.Crawler
@@ -9,6 +10,7 @@ import lila.memo.CacheApi
 
 final class OpeningApi(
     wikiApi: OpeningWikiApi,
+    explorerCache: OpeningExplorerCache,
     cacheApi: CacheApi,
     gameRepo: GameRepo,
     pgnDump: PgnDump,
@@ -58,7 +60,20 @@ final class OpeningApi(
       wiki <- query.closestOpening.traverse(wikiApi(_, withWikiRevisions))
       loadStats = canLoadExpensiveStats(wiki.exists(_.hasMarkup), crawler, proxy)
       stats <-
-        if loadStats then explorer.stats(query.uci, query.config, crawler)
+        if loadStats then
+          val isDefault = query.config.isDefault
+          (if isDefault then explorerCache.getFreshPosition(query.fen, 24.hours) else fuccess(none)).flatMap:
+            case Some(pos) => fuccess(Success(pos.some))
+            case None =>
+              explorer.stats(query.uci, query.config, crawler).flatMap:
+                case success @ Success(Some(pos)) =>
+                  if isDefault then explorerCache.putPosition(query.fen, pos).inject(success)
+                  else fuccess(success)
+                case failure @ Failure(_) if isDefault =>
+                  explorerCache.getPosition(query.fen).map:
+                    case Some(cached) => Success(cached.some)
+                    case None         => failure
+                case other => fuccess(other)
         else fuccess(scala.util.Success(none))
       statsOption = stats.toOption.flatten
       allHistory <- allGamesHistory.get(query.config)
@@ -72,13 +87,19 @@ final class OpeningApi(
   private val winRateThreshold = 15f
 
   def isWinRateBalanced(fen: chess.format.Fen.Full): Fu[Boolean] =
-    explorer.statsByFen(fen).map:
-      case None                          => true // explorer unavailable → fail open
-      case Some(stats) if stats.sum == 0 => true // no data
-      case Some(stats) =>
-        val wp = stats.white.toFloat * 100 / stats.sum
-        val bp = stats.black.toFloat * 100 / stats.sum
-        Math.abs(wp - bp) < winRateThreshold
+    explorerCache.getStats(fen).flatMap:
+      case Some(stats) if stats.sum > 0 => fuccess(isBalanced(stats))
+      case _ =>
+        explorer.statsByFen(fen).map:
+          case None => true
+          case Some(stats) =>
+            explorerCache.putStats(fen, stats)
+            if stats.sum == 0 then true else isBalanced(stats)
+
+  private def isBalanced(stats: OpeningExplorer.Stats): Boolean =
+    val wp = stats.white.toFloat * 100 / stats.sum
+    val bp = stats.black.toFloat * 100 / stats.sum
+    Math.abs(wp - bp) < winRateThreshold
 
   def readConfig(using RequestHeader) = configStore.read
 
