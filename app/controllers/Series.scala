@@ -54,7 +54,7 @@ final class Series(env: Env) extends LilaController(env):
           json <- env.series.jsonView(s, Some(me.userId))
           socketVersion <- env.series.version(s.id)
           page <- Ok.page(views.series.pick(s, json, myPool, displayOpenings, socketVersion))
-        yield page
+        yield page.noCache
   }
 
   // RandomSelecting 페이지 (HTML)
@@ -68,7 +68,7 @@ final class Series(env: Env) extends LilaController(env):
           json <- env.series.jsonView(s, Some(me.userId))
           socketVersion <- env.series.version(s.id)
           page <- Ok.page(views.series.randomSelecting(s, json, socketVersion))
-        yield page
+        yield page.noCache
   }
 
   def apiShow(id: SeriesId) = Open:
@@ -408,7 +408,7 @@ final class Series(env: Env) extends LilaController(env):
           json <- env.series.jsonView(s, Some(me.userId))
           socketVersion <- env.series.version(s.id)
           page <- Ok.page(views.series.finished(s, json, socketVersion))
-        yield page
+        yield page.noCache
   }
 
   // 리매치 offer/accept

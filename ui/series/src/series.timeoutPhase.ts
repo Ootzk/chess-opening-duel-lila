@@ -49,6 +49,23 @@ export function initModule(config: PickConfig): void {
   // Start timers after vnode is initialized (prevents "vnode not initialized" error)
   ctrl.init();
 
+  // Detect bfcache restoration (browser back/forward) and redirect if phase changed
+  window.addEventListener('pageshow', async (event: PageTransitionEvent) => {
+    if (event.persisted) {
+      try {
+        const res = await fetch(`/api/series/${config.seriesId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const realPhase = Number(data.phase);
+        if (realPhase !== ctrl.phase) {
+          ctrl.handlePhase({ phase: realPhase, gameId: data.currentGame });
+        }
+      } catch {
+        /* network error — ignore */
+      }
+    }
+  });
+
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     ctrl.destroy();
