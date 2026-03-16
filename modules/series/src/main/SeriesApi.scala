@@ -172,7 +172,7 @@ final class SeriesApi(
 
   // ===== 픽 타임아웃 =====
 
-  def timeoutPicks(seriesId: SeriesId, userId: UserId, selectedNames: List[String]): Fu[Option[Series]] =
+  def timeoutPicks(seriesId: SeriesId, userId: UserId, selectedKeys: List[String]): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
@@ -185,8 +185,11 @@ final class SeriesApi(
             else
               // 현재 선택 + 랜덤 채우기 (유저별 pool 사용)
               userPool(userId).flatMap: pool =>
-                val currentPicks = selectedNames.flatMap(name => pool.find(_.name == name))
-                val remaining = pool.filterNot(p => currentPicks.exists(_.name == p.name))
+                val currentPicks = selectedKeys.flatMap: key =>
+                  OpeningPreset.parseCompositeKey(key).flatMap: (name, color) =>
+                    pool.find(p => p.name == name && p.ownerColor == color)
+                val currentPickKeys = currentPicks.map(p => (p.name, p.ownerColor)).toSet
+                val remaining = pool.filterNot(p => currentPickKeys.contains((p.name, p.ownerColor)))
                 val needed = Series.maxPicks - currentPicks.size
                 val randomFills = scala.util.Random.shuffle(remaining).take(needed)
                 val finalPicks = currentPicks ++ randomFills
@@ -273,7 +276,7 @@ final class SeriesApi(
 
   // ===== 밴 타임아웃 =====
 
-  def timeoutBans(seriesId: SeriesId, userId: UserId, selectedNames: List[String]): Fu[Option[Series]] =
+  def timeoutBans(seriesId: SeriesId, userId: UserId, selectedKeys: List[String]): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
@@ -286,12 +289,13 @@ final class SeriesApi(
             else
               // 상대 픽에서 선택 가능한 밴 후보
               val opponentPicks = s.picks(1 - idx)
-              val opponentPickNames = opponentPicks.map(_.name).toSet
-              val currentBans = selectedNames.filter(opponentPickNames.contains)
-                .flatMap(name => opponentPicks.find(_.name == name).map(_.toPreset))
+              val currentBans = selectedKeys.flatMap: key =>
+                OpeningPreset.parseCompositeKey(key).flatMap: (name, color) =>
+                  opponentPicks.find(o => o.name == name && o.ownerColor == color).map(_.toPreset)
 
               // 남은 상대 픽 중에서 랜덤 채우기
-              val remaining = s.picks(1 - idx).filterNot(p => currentBans.exists(_.name == p.name))
+              val currentBanKeys = currentBans.map(b => (b.name, b.ownerColor)).toSet
+              val remaining = s.picks(1 - idx).filterNot(p => currentBanKeys.contains((p.name, p.ownerColor)))
               val needed = Series.maxBans - currentBans.size
               val randomFills = scala.util.Random.shuffle(remaining.toList).take(needed).map(_.toPreset)
               val finalBans = currentBans ++ randomFills
@@ -554,7 +558,7 @@ final class SeriesApi(
   // ===== Selecting Phase: 패자가 오프닝 선택 =====
 
   /** 실시간 선택 동기화 — DB에 저장하지 않고 WS로만 브로드캐스트 */
-  def setSelectingPick(seriesId: SeriesId, userId: UserId, presetName: Option[String]): Fu[Option[Series]] =
+  def setSelectingPick(seriesId: SeriesId, userId: UserId, compositeKey: Option[String]): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
@@ -564,11 +568,11 @@ final class SeriesApi(
             if s.phase != Series.Phase.Selecting then fuccess(None)
             else if s.lastGameLoser != Some(idx) then fuccess(None)
             else
-              socket.foreach(_.notifySelectingPick(seriesId, presetName))
+              socket.foreach(_.notifySelectingPick(seriesId, compositeKey))
               fuccess(Some(s))
 
   /** Confirm selecting pick — 3초 delay 후 게임 생성 */
-  def confirmSelectingPick(seriesId: SeriesId, userId: UserId, presetName: String): Fu[Option[Series]] =
+  def confirmSelectingPick(seriesId: SeriesId, userId: UserId, compositeKey: String): Fu[Option[Series]] =
     repo.byId(seriesId).flatMap:
       case None => fuccess(None)
       case Some(s) =>
@@ -580,10 +584,12 @@ final class SeriesApi(
             else if s.player(idx).confirmedSelecting then fuccess(Some(s))
             else
               val remaining = s.remainingPicks(idx)
-              remaining.find(_.name == presetName) match
+              val found = OpeningPreset.parseCompositeKey(compositeKey).flatMap: (name, color) =>
+                remaining.find(o => o.name == name && o.ownerColor == color)
+              found match
                 case None => fuccess(None)
                 case Some(_) =>
-                  repo.setConfirmedSelecting(seriesId, idx, true, Some(presetName)).flatMap: _ =>
+                  repo.setConfirmedSelecting(seriesId, idx, true, Some(compositeKey)).flatMap: _ =>
                     socketNotifyConfirmed(seriesId, idx, "selecting")
                     val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
                       confirmDelaySchedules.remove(seriesId)
@@ -614,9 +620,11 @@ final class SeriesApi(
         s.lastGameLoser match
           case Some(loserIdx) if s.player(loserIdx).confirmedSelecting =>
             s.player(loserIdx).selectingPick match
-              case Some(pickName) =>
+              case Some(pickKey) =>
                 val remaining = s.remainingPicks(loserIdx)
-                remaining.find(_.name == pickName).foreach: opening =>
+                val found = OpeningPreset.parseCompositeKey(pickKey).flatMap: (name, color) =>
+                  remaining.find(o => o.name == name && o.ownerColor == color)
+                found.foreach: opening =>
                   val round = s.currentRound
                   val withOpening = s.markOpeningUsed(opening.id, round, SelectionMethod.LoserChoice)
                   val clearSelecting = withOpening.updatePlayer(loserIdx, _.clearSelecting)
@@ -659,7 +667,7 @@ final class SeriesApi(
             else if s.lastGameLoser != Some(idx) then fuccess(None)
             else
               val remaining = s.remainingPicks(idx)
-              remaining.find(_.name == preset.name) match
+              remaining.find(o => o.name == preset.name && o.ownerColor == preset.ownerColor) match
                 case None => fuccess(None)
                 case Some(opening) =>
                   val round = s.currentRound
@@ -720,7 +728,8 @@ final class SeriesApi(
                 // 유저별 pool 로드 후 랜덤 채우기
                 userPool(currentS.player(idx).userId).map: pool =>
                   val currentPicks = currentS.picks(idx)
-                  val remaining    = pool.filterNot(p => currentPicks.exists(_.name == p.name))
+                  val currentPickKeys = currentPicks.map(p => (p.name, p.ownerColor)).toSet
+                  val remaining    = pool.filterNot(p => currentPickKeys.contains((p.name, p.ownerColor)))
                   val needed       = Series.maxPicks - currentPicks.size
                   val randomFills  = scala.util.Random.shuffle(remaining).take(needed)
                   val finalPicks   = currentPicks.map(_.toPreset) ++ randomFills
@@ -756,7 +765,8 @@ final class SeriesApi(
               fuSeries.map: currentS =>
                 val opponentPicks = currentS.picks(1 - idx)
                 val currentBans   = currentS.bans(idx)
-                val remaining     = opponentPicks.filterNot(p => currentBans.exists(_.name == p.name))
+                val currentBanKeys = currentBans.map(b => (b.name, b.ownerColor)).toSet
+                val remaining     = opponentPicks.filterNot(p => currentBanKeys.contains((p.name, p.ownerColor)))
                 val needed        = Series.maxBans - currentBans.size
                 val randomFills = scala.util.Random.shuffle(remaining.toList).take(needed).map(_.toPreset)
                 val finalBans   = currentBans.map(_.toPreset) ++ randomFills

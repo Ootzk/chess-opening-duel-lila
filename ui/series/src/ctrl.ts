@@ -6,7 +6,6 @@ import {
   getOpponentPicks,
   getRemainingPicks,
   openingKey,
-  keyToName,
 } from './interfaces';
 
 export default class SeriesPickCtrl {
@@ -216,7 +215,7 @@ export default class SeriesPickCtrl {
   // Pick 타임아웃: 현재 선택 + 랜덤 채우기 + 자동 확정
   private async timeoutPicks(): Promise<void> {
     try {
-      const selections = Array.from(this.selectedPicks).map(keyToName);
+      const selections = Array.from(this.selectedPicks);
       const response = await fetch(`/series/${this.seriesId}/timeoutPicks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -241,7 +240,7 @@ export default class SeriesPickCtrl {
   // Ban 타임아웃: 현재 선택 + 랜덤 채우기 + 자동 확정
   private async timeoutBans(): Promise<void> {
     try {
-      const selections = Array.from(this.selectedBans).map(keyToName);
+      const selections = Array.from(this.selectedBans);
       const response = await fetch(`/series/${this.seriesId}/timeoutBans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -438,9 +437,8 @@ export default class SeriesPickCtrl {
 
   private async sendSelections(): Promise<void> {
     if (this.isSelecting) {
-      // Real-time sync: send current pick to server for WS broadcast (server expects name)
-      const selectedKey = Array.from(this.selectedSelectingPick)[0] ?? null;
-      const selected = selectedKey ? keyToName(selectedKey) : null;
+      // Real-time sync: send current pick to server for WS broadcast (composite key)
+      const selected = Array.from(this.selectedSelectingPick)[0] ?? null;
       try {
         await fetch(`/series/${this.seriesId}/setSelectingPick`, {
           method: 'POST',
@@ -457,8 +455,8 @@ export default class SeriesPickCtrl {
       ? `/series/${this.seriesId}/picks`
       : `/series/${this.seriesId}/bans`;
 
-    // Convert composite keys back to names for server API
-    const selections = Array.from(this.currentSelections).map(keyToName);
+    // Send composite keys (name::color) to server API
+    const selections = Array.from(this.currentSelections);
 
     try {
       const response = await fetch(endpoint, {
@@ -481,10 +479,9 @@ export default class SeriesPickCtrl {
     if (this.myConfirmed) return;
 
     if (this.isSelecting) {
-      // Selecting phase: confirm with 3s cancel window (server expects name)
-      const selectedKey = Array.from(this.selectedSelectingPick)[0];
-      if (!selectedKey) return;
-      const selected = keyToName(selectedKey);
+      // Selecting phase: confirm with 3s cancel window (composite key)
+      const selected = Array.from(this.selectedSelectingPick)[0];
+      if (!selected) return;
       try {
         const response = await fetch(`/series/${this.seriesId}/confirmSelecting`, {
           method: 'POST',
@@ -946,21 +943,22 @@ export default class SeriesPickCtrl {
     this.showcaseGameId = gameId;
     this.showcasePhase = 'selecting-showcase';
 
-    // Find the selected opening
+    // Find the selected opening (match by composite key)
     if (this.isMyTurnToSelect) {
       const pickKey = Array.from(this.selectedSelectingPick)[0];
       if (pickKey) {
-        const name = keyToName(pickKey);
-        this.showcaseOpening = this.series.openings.find(o => o.name === name && o.source === 'pick') ?? null;
+        this.showcaseOpening =
+          this.series.openings.find(o => openingKey(o) === pickKey && o.source === 'pick') ?? null;
       }
       // Fallback: timeout 시 서버가 랜덤 선택한 오프닝 (selectingPick WS로 수신)
       if (!this.showcaseOpening && this.opponentSelectingPick) {
         this.showcaseOpening =
-          this.series.openings.find(o => o.name === this.opponentSelectingPick && o.source === 'pick') ?? null;
+          this.series.openings.find(o => openingKey(o) === this.opponentSelectingPick && o.source === 'pick') ?? null;
       }
     } else {
-      const pickName = this.opponentSelectingPick;
-      this.showcaseOpening = this.series.openings.find(o => o.name === pickName && o.source === 'pick') ?? null;
+      const pickKey = this.opponentSelectingPick;
+      this.showcaseOpening =
+        this.series.openings.find(o => openingKey(o) === pickKey && o.source === 'pick') ?? null;
     }
 
     // 5-second countdown

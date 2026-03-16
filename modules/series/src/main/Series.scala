@@ -87,8 +87,8 @@ case class Series(
   def remainingPicks(playerIndex: Int): List[SeriesOpening] =
     val myPicks = picks(playerIndex)
     val bannedByOpponent = bans(1 - playerIndex)
-    val bannedNames = bannedByOpponent.map(_.name).toSet
-    myPicks.filterNot(p => bannedNames.contains(p.name) || p.isUsed)
+    val bannedKeys = bannedByOpponent.map(b => (b.name, b.ownerColor)).toSet
+    myPicks.filterNot(p => bannedKeys.contains((p.name, p.ownerColor)) || p.isUsed)
 
   /** 양측 남은 픽 전체 (미사용만) */
   def unusedRemainingPicks: List[SeriesOpening] =

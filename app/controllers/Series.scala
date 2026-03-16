@@ -5,7 +5,7 @@ import play.api.libs.json.{ Json, JsArray }
 
 import lila.app.*
 import lila.core.id.SeriesId
-import lila.series.OpeningPresets
+import lila.series.{ OpeningPreset, OpeningPresets }
 
 final class Series(env: Env) extends LilaController(env):
   def api = env.series.api
@@ -104,7 +104,7 @@ final class Series(env: Env) extends LilaController(env):
         ))
       ))
 
-  // 픽 설정 (이름 리스트로 받아서 OpeningPreset으로 변환)
+  // 픽 설정 (composite key 리스트로 받아서 OpeningPreset으로 변환)
   def setPicks(id: SeriesId) = AuthBody(parse.json) { ctx ?=> me ?=>
     Found(api.byId(id)): s =>
       if !isPlayer(s, me.userId) then
@@ -112,15 +112,17 @@ final class Series(env: Env) extends LilaController(env):
       else
         ctx.body.body.asOpt[JsArray].map(_.value.flatMap(_.asOpt[String]).toList) match
           case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
-          case Some(names) =>
+          case Some(keys) =>
             api.userPool(me.userId).flatMap: pool =>
-              val picks = names.flatMap(name => pool.find(_.name == name))
+              val picks = keys.flatMap: key =>
+                OpeningPreset.parseCompositeKey(key).flatMap: (name, color) =>
+                  pool.find(p => p.name == name && p.ownerColor == color)
               api.setPicks(id, me.userId, picks.toList).map:
-                case Some(_) => JsonOk(Json.obj("ok" -> true, "picks" -> picks.map(_.name)))
+                case Some(_) => JsonOk(Json.obj("ok" -> true, "picks" -> picks.map(_.compositeKey)))
                 case None => JsonBadRequest(jsonError("Cannot set picks in current phase"))
   }
 
-  // 밴 설정 (이름 리스트로 받아서 OpeningPreset으로 변환)
+  // 밴 설정 (composite key 리스트로 받아서 OpeningPreset으로 변환)
   def setBans(id: SeriesId) = AuthBody(parse.json) { ctx ?=> me ?=>
     Found(api.byId(id)): s =>
       if !isPlayer(s, me.userId) then
@@ -128,13 +130,15 @@ final class Series(env: Env) extends LilaController(env):
       else
         ctx.body.body.asOpt[JsArray].map(_.value.flatMap(_.asOpt[String]).toList) match
           case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
-          case Some(names) =>
+          case Some(keys) =>
             // Ban phase: 상대 픽에서 선택하므로 상대 픽을 사용
             val oppIdx = 1 - s.playerIndex(me.userId).getOrElse(0)
             val opponentPicks = s.picks(oppIdx)
-            val bans = names.flatMap(name => opponentPicks.find(_.name == name).map(_.toPreset))
+            val bans = keys.flatMap: key =>
+              OpeningPreset.parseCompositeKey(key).flatMap: (name, color) =>
+                opponentPicks.find(o => o.name == name && o.ownerColor == color).map(_.toPreset)
             api.setBans(id, me.userId, bans).map:
-              case Some(_) => JsonOk(Json.obj("ok" -> true, "bans" -> bans.map(_.name)))
+              case Some(_) => JsonOk(Json.obj("ok" -> true, "bans" -> bans.map(_.compositeKey)))
               case None => JsonBadRequest(jsonError("Cannot set bans in current phase"))
   }
 
@@ -269,10 +273,12 @@ final class Series(env: Env) extends LilaController(env):
       else
         ctx.body.body.asOpt[String] match
           case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
-          case Some(name) =>
+          case Some(key) =>
             // Selecting phase: 자신의 remaining picks에서 선택
             val myIdx = s.playerIndex(me.userId).getOrElse(0)
-            s.remainingPicks(myIdx).find(_.name == name).map(_.toPreset) match
+            val found = OpeningPreset.parseCompositeKey(key).flatMap: (name, color) =>
+              s.remainingPicks(myIdx).find(o => o.name == name && o.ownerColor == color).map(_.toPreset)
+            found match
               case None => fuccess(JsonBadRequest(jsonError("Invalid opening name")))
               case Some(opening) =>
                 api.selectNextOpening(id, me.userId, opening).map:
@@ -292,8 +298,8 @@ final class Series(env: Env) extends LilaController(env):
       if !isPlayer(s, me.userId) then
         fuccess(JsonBadRequest(jsonError("Not a player of this series")))
       else
-        val name = ctx.body.body.asOpt[String]
-        api.setSelectingPick(id, me.userId, name).map:
+        val compositeKey = ctx.body.body.asOpt[String]
+        api.setSelectingPick(id, me.userId, compositeKey).map:
           case Some(_) => JsonOk(Json.obj("ok" -> true))
           case None => JsonBadRequest(jsonError("Cannot set selecting pick"))
   }
@@ -306,8 +312,8 @@ final class Series(env: Env) extends LilaController(env):
       else
         ctx.body.body.asOpt[String] match
           case None => fuccess(JsonBadRequest(jsonError("Invalid request body")))
-          case Some(name) =>
-            api.confirmSelectingPick(id, me.userId, name).map:
+          case Some(key) =>
+            api.confirmSelectingPick(id, me.userId, key).map:
               case Some(updated) =>
                 val myIdx = updated.playerIndex(me.userId).get
                 JsonOk(Json.obj(

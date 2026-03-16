@@ -2,7 +2,20 @@ package lila.series
 
 import chess.format.Fen
 
-case class OpeningPreset(name: String, fen: Fen.Full, url: String, ownerColor: chess.Color)
+case class OpeningPreset(name: String, fen: Fen.Full, url: String, ownerColor: chess.Color):
+  def compositeKey: String = s"$name::${ownerColor.name}"
+
+object OpeningPreset:
+  /** "name::white" or "name::black" → (name, Color) */
+  def parseCompositeKey(key: String): Option[(String, chess.Color)] =
+    key.lastIndexOf("::") match
+      case -1 => None
+      case idx =>
+        val name = key.substring(0, idx)
+        key.substring(idx + 2) match
+          case "white" => Some((name, chess.Color.White))
+          case "black" => Some((name, chess.Color.Black))
+          case _       => None
 
 object OpeningPresets:
   // 오프닝 이름을 로컬 /opening URL로 변환 (공백→_, 콜론 제거)
