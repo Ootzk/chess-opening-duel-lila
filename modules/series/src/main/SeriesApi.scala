@@ -1049,8 +1049,9 @@ final class SeriesApi(
     val remaining = s.remainingPicks(aiIdx)
     if remaining.nonEmpty then
       val picked = scala.util.Random.shuffle(remaining).head
-      socket.foreach(_.notifySelectingPick(s.id, Some(picked.name)))
-      repo.setConfirmedSelecting(s.id, aiIdx, true, Some(picked.name)).foreach: _ =>
+      val compositeKey = picked.toPreset.compositeKey
+      socket.foreach(_.notifySelectingPick(s.id, Some(compositeKey)))
+      repo.setConfirmedSelecting(s.id, aiIdx, true, Some(compositeKey)).foreach: _ =>
         socketNotifyConfirmed(s.id, aiIdx, "selecting")
         val cancellable = scheduler.scheduleOnce(Series.bothConfirmedDelay.seconds):
           confirmDelaySchedules.remove(s.id)
