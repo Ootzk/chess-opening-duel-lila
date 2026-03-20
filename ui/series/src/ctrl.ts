@@ -150,12 +150,12 @@ export default class SeriesPickCtrl {
       this.opponentConfirmed = this.series.players[oppIndex].confirmedBans;
     } else if (this.isSelecting && this.isMyTurnToSelect) {
       this.myConfirmed = this.series.players[povIndex].confirmedSelecting;
-      // Load saved selectingPick if any (server stores name, resolve to composite key)
+      // Load saved selectingPick if any (server stores compositeKey: "name::color")
       const savedPick = this.series.players[povIndex].selectingPick;
       if (savedPick) {
         this.selectedSelectingPick.clear();
-        const match = this.availableOpenings.find(o => o.name === savedPick);
-        this.selectedSelectingPick.add(match ? openingKey(match) : openingKey({ name: savedPick }));
+        const match = this.availableOpenings.find(o => openingKey(o) === savedPick);
+        this.selectedSelectingPick.add(match ? openingKey(match) : savedPick);
       }
     } else if (this.isSelecting && !this.isMyTurnToSelect) {
       this.opponentConfirmed = this.series.players[oppIndex].confirmedSelecting;

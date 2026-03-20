@@ -119,8 +119,8 @@ final class SeriesApi(
           case Some(idx) =>
             if s.phase != Series.Phase.Banning then fuccess(None)
             else
-              val opponentPicks = s.picks(1 - idx).map(_.name).toSet
-              val validPresets = presets.filter(p => opponentPicks.contains(p.name))
+              val opponentPickKeys = s.picks(1 - idx).map(p => (p.name, p.ownerColor)).toSet
+              val validPresets = presets.filter(p => opponentPickKeys.contains((p.name, p.ownerColor)))
               val newBans = validPresets.take(Series.maxBans).map: preset =>
                 SeriesOpening.makeBan(preset, idx)
               // Atomic: $pull old bans + $push new bans to avoid lost-update race
@@ -864,7 +864,7 @@ final class SeriesApi(
     val withOpening = s.markOpeningUsed(selected.id, round, method)
     // Selecting timeout: 선택된 오프닝을 WS로 브로드캐스트 (showcase 표시용)
     if s.phase == Series.Phase.Selecting then
-      socket.foreach(_.notifySelectingPick(s.id, Some(selected.name)))
+      socket.foreach(_.notifySelectingPick(s.id, Some(selected.toPreset.compositeKey)))
 
     for
       game <- createGame(withOpening, round, selected)
