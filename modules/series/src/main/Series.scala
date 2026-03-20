@@ -267,7 +267,7 @@ object Series:
       id = makeId,
       players = (
         SeriesPlayer(player0, index = 0),
-        SeriesPlayer(player1, index = 1)
+        SeriesPlayer(player1, index = 1, isAi = aiLevel.isDefined)
       ),
       openings = Nil,
       games = Nil,

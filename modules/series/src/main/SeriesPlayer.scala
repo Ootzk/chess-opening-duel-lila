@@ -12,7 +12,8 @@ case class SeriesPlayer(
     confirmedSelecting: Boolean = false,
     selectingPick: Option[String] = None, // 선택한 오프닝 이름
     confirmedNext: Boolean = false,
-    lastSeenAt: Option[Instant] = None
+    lastSeenAt: Option[Instant] = None,
+    isAi: Boolean = false
 ):
   def addWin: SeriesPlayer                 = copy(score = score + 2)
   def addDraw: SeriesPlayer                = copy(score = score + 1)
@@ -28,8 +29,9 @@ case class SeriesPlayer(
   def cancelConfirmNext: SeriesPlayer      = copy(confirmedNext = false)
   def clearNext: SeriesPlayer              = copy(confirmedNext = false)
   def updateLastSeen: SeriesPlayer         = copy(lastSeenAt = Some(nowInstant))
+  // AI는 WebSocket 핑이 없으므로 항상 online으로 처리
   // None = 아직 접속 여부를 모름 → online으로 가정
   // Some(time) = time이 5초 이내면 online, 아니면 offline
   // (WS ping이 3초 간격으로 개별 플레이어별 갱신)
-  def isOnline: Boolean                    = lastSeenAt.forall(_.isAfter(nowInstant.minusSeconds(5)))
-  def isDisconnected: Boolean              = lastSeenAt.exists(_.isBefore(nowInstant.minusSeconds(5)))
+  def isOnline: Boolean                    = isAi || lastSeenAt.forall(_.isAfter(nowInstant.minusSeconds(5)))
+  def isDisconnected: Boolean              = !isAi && lastSeenAt.exists(_.isBefore(nowInstant.minusSeconds(5)))

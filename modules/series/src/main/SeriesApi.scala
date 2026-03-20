@@ -524,8 +524,8 @@ final class SeriesApi(
   def serverTimeoutResting(s: Series): Fu[Option[Series]] =
     if s.bothNextConfirmed then fuccess(Some(s)) // 3초 스케줄이 처리 중
     else
-      val p0dc = s.player(0).isDisconnected && !(s.isAi && s.aiPlayerIndex == 0)
-      val p1dc = s.player(1).isDisconnected && !(s.isAi && s.aiPlayerIndex == 1)
+      val p0dc = s.player(0).isDisconnected
+      val p1dc = s.player(1).isDisconnected
       if p0dc && p1dc then abortSeries(s)         // 양측 DC → Abort
       else if p0dc then forfeitSeriesByIndex(s, loserIdx = 0) // 1명 DC → 몰수승
       else if p1dc then forfeitSeriesByIndex(s, loserIdx = 1)
@@ -717,9 +717,9 @@ final class SeriesApi(
       // 미확정 플레이어들 자동 처리
       val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedPicks)
 
-      // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort (AI는 DC 제외)
+      // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
       val disconnectedPlayer = unconfirmedPlayers.find: idx =>
-        s.player(idx).isDisconnected && !(s.isAi && s.aiPlayerIndex == idx)
+        s.player(idx).isDisconnected
       disconnectedPlayer match
         case Some(_) => abortSeries(s)
         case None =>
@@ -756,9 +756,9 @@ final class SeriesApi(
       // 미확정 플레이어들 자동 처리
       val unconfirmedPlayers = List(0, 1).filter(idx => !s.player(idx).confirmedBans)
 
-      // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort (AI는 DC 제외)
+      // 미확정 플레이어 중 disconnected인 플레이어가 있으면 시리즈 abort
       val disconnectedPlayer = unconfirmedPlayers.find: idx =>
-        s.player(idx).isDisconnected && !(s.isAi && s.aiPlayerIndex == idx)
+        s.player(idx).isDisconnected
       disconnectedPlayer match
         case Some(_) => abortSeries(s)
         case None =>
@@ -832,8 +832,8 @@ final class SeriesApi(
         // 이미 confirmedSelecting이면 3초 스케줄이 처리 중
         if s.player(loserIdx).confirmedSelecting then fuccess(Some(s))
         else
-          val p0dc = s.player(0).isDisconnected && !(s.isAi && s.aiPlayerIndex == 0)
-          val p1dc = s.player(1).isDisconnected && !(s.isAi && s.aiPlayerIndex == 1)
+          val p0dc = s.player(0).isDisconnected
+          val p1dc = s.player(1).isDisconnected
           if p0dc && p1dc then abortSeries(s)           // 양측 DC → Abort
           else handleSelectingTimeout(s.id).map(_ => Some(s)) // 랜덤 선택 (DC 여부 무관)
 

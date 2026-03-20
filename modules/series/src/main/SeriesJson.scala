@@ -72,7 +72,7 @@ final class SeriesJson(
       "confirmedPicks" -> p.confirmedPicks,
       "confirmedBans" -> p.confirmedBans,
       "confirmedSelecting" -> p.confirmedSelecting,
-      "isOnline" -> (p.isOnline || (series.isAi && series.aiPlayerIndex == p.index))
+      "isOnline" -> p.isOnline
     )
     .add("selectingPick" -> p.selectingPick)
     .add("user" -> user.map(u =>
